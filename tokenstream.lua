@@ -1,4 +1,5 @@
 local create_node = require("nodes")
+local dbg = require("debugger")
 local module = {}
 
 -- Matches string against pattern with return values:
@@ -7,9 +8,10 @@ local module = {}
 -- int - offset to move cursor
 -- int - number of whitespaces before pattern
 local function match_pattern(str, pat)
-	local a, b = string.match(pat, "^()%s*()"..pat.."()")
+	--dbg()
+	local a, b = string.match(str, "^%s*()"..pat.."()")
 	if a == nil then return str, nil, 0, 0 end
-	return string.sub(str, b), string.sub(str, a, b-1), b, a
+	return string.sub(str, b), string.sub(str, a, b-1), b-1, a-1
 end
 
 local next, 	-- Moves stream one token forward and return token
@@ -29,6 +31,7 @@ module.new = function(filename)
 		line_unparsed = "",
 		line_nr = 0,
 		filehandle = io.open(filename, "r"),
+		file = filename,
 		file_pos = 0,
 		states = {} 
 	}
@@ -48,6 +51,9 @@ module.new = function(filename)
 	tokenstream.close = close
 	tokenstream.token = {type="BOF"}
 
+	tokenstream.get_file = function(s) return s.file end
+	tokenstream.get_line = function(s) return s.line_nr end
+
 	-- Make members private and only allow function calls
 	
 	tokenstream_mt = {
@@ -56,7 +62,7 @@ module.new = function(filename)
 		end,
 		__index = function(t, k)
 			local a = rawget(t, k)
-			if type(a) ~= "function" then error("Cannot access private members") end
+			if type(a) ~= "function"  then error("Cannot access private members") end
 		end,
 		__metatable = nil
 	}
@@ -80,17 +86,20 @@ close = function(stream)
 end
 
 next = function(stream, peek)
+
 	if stream == nil then return nil end
 	if stream.filehandle == nil then return nil end
 	
 	local node
 	local line, match, len, offset
 
+
 	local function update_stream()
 		node.content = match
-		node.line_pos = stream.line_pos + offset
+		node.line_pos = stream.line_pos + (offset or 0)
 		node.line_nr = stream.line_nr
 		node.line_txt = stream.line_txt
+		node.file = stream.file
 		if peek == nil or not peek then
 			stream.line_pos = stream.line_pos + len
 			stream.file_pos = stream.file_pos + len
@@ -99,37 +108,43 @@ next = function(stream, peek)
 		end
 	end
 
+	if stream.token.type == "BOF" and
+		stream.line_unparsed == "" then
+		stream:read_next()
+	end
+
 	-- Read next line if no unparsed txt, return EOF if no more to read
-	if stream.line_unparsed == "" then 
-		if peek ~= nil and peek then stream:push() end
-		if stream:read_next() then
+	
+	if stream.line_unparsed == "" then
+		if stream:has_next() then
+			if peek == nil or not peek then 
+				stream:read_next()
+				stream:push()
+			end
 			node = create_node.newline()
 			match = "\n"
 			len = 1
 			offset = 0
-			line = stream.line_unparsed
+			line = ""
 			update_stream()
-			if peek ~= nil and peek then 
+			if peek == nil or not peek then
 				stream:pop()
 			end
 			return node
 		else
 			node = create_node.eof()
 			match = ""
-			len = 1
+			len = 0
 			offset = 0
-			line = stream.line_unparsed
+			line = ""
 			update_stream()
 			return node
 		end
 	end
-
-
-
 	
 
 	-- Identifer
-	local line, match, len, offset = match_pattern(stream.line_unparsed, "%a%w*_*%w*")
+	line, match, len, offset = match_pattern(stream.line_unparsed, "%a%w*_*%w*")
 	if node == nil and match ~= nil then
 		node = create_node.identifier()
 		update_stream()
@@ -138,31 +153,31 @@ next = function(stream, peek)
 	-- Operators
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%=")
 	if node == nil and match ~= nil then
-		node = create_node.operator("binary", match)
+		node = create_node.operator("binary", match, 0)
 		update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%+")
 	if node == nil and match ~= nil then
-		node = create_node.operator("either", match)
+		node = create_node.operator("either", match, 1)
 		update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%-")
 	if node == nil and match ~= nil then
-		node = create_node.operator("either", match)
+		node = create_node.operator("either", match, 1)
 		update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%*")
 	if node == nil and match ~= nil then
-		node = create_node.operator("binary", match)
+		node = create_node.operator("binary", match, 2)
 		update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%/")
 	if node == nil and match ~= nil then
-		node = create_node.operator("binary", match)
+		node = create_node.operator("binary", match, 2)
 		update_stream()
 		return node
 	end
@@ -202,6 +217,7 @@ read_next = function(stream)
 		return false
 	else
 		stream.line_txt = line
+		stream.line_unparsed = line
 		stream.line_nr = (stream.line_nr or 0) + 1
 		stream.line_pos = 1
 		return true
@@ -215,8 +231,9 @@ end
 
 
 consume = function(stream, tokenType)
-	if stream ~= nil and stream.token.type == tokenType then
-		return stream:next()
+	local token = stream:peek()
+	if stream ~= nil and token.type == tokenType then
+		return stream:next(false)
 	else
 		return nil
 	end
@@ -234,7 +251,7 @@ push = function(stream)
 end
 
 
-pop = function()
+pop = function(stream)
 	if #stream.states == 0 then error("Tried popping state when no state was found!") end
 	local state = stream.states[#stream.states]
 	for k,v in pairs(state) do
@@ -242,7 +259,9 @@ pop = function()
 	end
 	table.remove(stream.states)
 	if stream.filehandle ~= nil then
-		stream.filehandle:seek("set", stream.file_pos)
+		local pos = stream.file_pos
+		if pos < 0 then pos = 0 end
+		stream.filehandle:seek("set", pos)
 		stream.lines = stream.filehandle:lines()
 	end
 end

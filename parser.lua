@@ -6,19 +6,20 @@ local write = io.write
 local error = require("error")
 local err = error.err
 local assert = error.assert
+local dbg = require("debugger")
 
 local function myassert(val, tok, msg)
 	if val ~= nil and val and tok ~= nil then return end
-	error("Error in file "..tostring(tok.file)..":"..tostring(tok.line).."  -  "..tostring(msg))
+	error("Error in file "..tostring(tok:get_file())..":"..tostring(tok:get_line()).."  -  "..tostring(msg))
 end
 
 local function create_node(tok, token, node_type)
 	local node = {
 		type = node_type or token.type,
-		line_nr = tok.line,
-		file = tok.file,
-		line_txt = tok.line_cache,
-		line_pos = token.cursor or 0
+		line_nr = token.line_nr,
+		file = token.file,
+		line_txt = token.line_txt,
+		line_pos = token.line_pos or 0
 	}
 	return node
 end
@@ -57,9 +58,13 @@ end
 
 local function parse_exp(tok)
 --	print("TOK: "..tok.line_txt)
+
 	local token = tok:peek()
 	if token == nil or token.type == "EOF" then return nil end
-	if token.type == "newline" then tok:consume("newline") token = tok:peek() end
+	if token.type == "newline" then
+		tok:consume("newline")
+		token = tok:peek()
+	end
 
 --	print("Parsing token "..token.type..","..tostring(token.content))
 	-- Accept numbers, variables and unary operators
@@ -87,7 +92,6 @@ local function parse_exp(tok)
 		out.value = tonumber(token.content)
 		tok:consume("number")
 		token = tok:peek()
---		print("exp-found number")
 
 	elseif token.type == "operator" and 
 		(token.op_type == "unary" or token.op_type == "either") then
@@ -153,7 +157,6 @@ local function internal_parse(tok)
 	local AST = {}
 	AST.nodes = {}
 	AST.node_count = 0
-	print("Begin parsing")
 	local node = parse_stat(tok)
 	
 	while node ~= nil and node.type ~= nil do
@@ -161,7 +164,6 @@ local function internal_parse(tok)
 		table.insert(AST.nodes, node)
 		node = parse_stat(tok)
 	end
-	print("End of parsing")
 
 	AST.node_count = #AST.nodes
 	return AST	
@@ -170,9 +172,9 @@ end
 
 module.parse = function(tok)
 	assert(tok)
-	tok:push_mark()
+	tok:push()
 	local a = internal_parse(tok)
-	tok:pop_mark()
+	tok:pop()
 	return a
 end
 
