@@ -28,12 +28,10 @@ end
 
 local function parse_exp(tok)
 
-	print("TOK: "..tostring(tok:peek().type))
 	tok:eat_newline()
 	local token = tok:peek()
 	if token == nil or token.type == "EOF" then return nil end
 
---	print("Parsing token "..token.type..","..tostring(token.content))
 	-- Accept numbers, variables and unary operators
 	local out = nil
 	if token.type == "parenthesis" and token.content == "(" then
@@ -145,7 +143,7 @@ local function internal_parse(tok)
 	end
 
 	if tok:has_next() then
-		print("WARNING! Parser didn't parse all tokens")
+		print("WARNING! Parser didn't parse the whole file")
 	end
 
 	AST.node_count = #AST.nodes

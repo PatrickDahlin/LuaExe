@@ -19,7 +19,6 @@ module.err = function(node, msg)
         io.write(line)
         print("^")
         print(tostring(msg or ""))
-		--print("At symbol: "..tostring(node.type)..","..tostring(node.content or node.op or node.name))
 	else
 		print("Unknown compiler error! "..tostring(msg or ""))
 	end

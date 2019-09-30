@@ -144,13 +144,8 @@ local function assign_verification(node)
 	local v = true
 	v = v and verify_op(node, "binary", "=", false)
 	assert(v, node, "Expected assignment statement")
-	--if not v then print("Not a binary operator") end
 	v = v and is_ident(node.left, true)
-	--if not v then print("Not an identifier") end
 	v = v and is_exp(node.right, true)
-	--if not v then print("No expression") end
-
-
 	return v
 end
 

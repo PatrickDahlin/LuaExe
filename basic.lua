@@ -27,8 +27,5 @@ io.write("Syntax: ")
 if res then print("OK") else print("ERROR") end
 
 
---local stream = tokenstream.new("mysrc.b")
---stream:next()
-
 print("Done")
 
