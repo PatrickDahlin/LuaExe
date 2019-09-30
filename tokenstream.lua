@@ -21,7 +21,8 @@ local next, 	-- Moves stream one token forward and return token
 	pop, 		-- Pop stream state, returning it to a previous state
 	has_next, 	-- Returns wether stream has content left to give
 	read_next, 	-- Reads in next line from source
-	close 		-- Closes the stream
+	close, 		-- Closes the stream
+	eat_newline	-- Consumes tokens until a non-newline token is encountered
 
 -- Main creation method
 module.new = function(filename)
@@ -49,6 +50,7 @@ module.new = function(filename)
 	tokenstream.has_next = has_next
 	tokenstream.read_next = read_next
 	tokenstream.close = close
+	tokenstream.eat_newline = eat_newline
 	tokenstream.token = {type="BOF"}
 
 	tokenstream.get_file = function(s) return s.file end
@@ -68,6 +70,15 @@ module.new = function(filename)
 	}
 	setmetatable(tokenstream, tokenstream_mt)
 	return tokenstream
+end
+
+eat_newline = function(stream)
+	if stream == nil then return end
+	local t = stream:peek()
+	while t ~= nil and t.type == "newline" do
+		stream:next()
+		t = stream:peek()
+	end
 end
 
 has_next = function(stream)
@@ -90,16 +101,19 @@ next = function(stream, peek)
 	if stream == nil then return nil end
 	if stream.filehandle == nil then return nil end
 	
+	-- declare variables used in local update func
 	local node
 	local line, match, len, offset
 
 
-	local function update_stream()
+	local function maybe_update_stream()
 		node.content = match
 		node.line_pos = stream.line_pos + (offset or 0)
 		node.line_nr = stream.line_nr
 		node.line_txt = stream.line_txt
 		node.file = stream.file
+
+		-- Don't write if we are peeking
 		if peek == nil or not peek then
 			stream.line_pos = stream.line_pos + len
 			stream.file_pos = stream.file_pos + len
@@ -110,14 +124,19 @@ next = function(stream, peek)
 
 	if stream.token.type == "BOF" and
 		stream.line_unparsed == "" then
+		print("------------BOF")
 		stream:read_next()
 	end
 
 	-- Read next line if no unparsed txt, return EOF if no more to read
 	
-	if stream.line_unparsed == "" then
+	if trim(stream.line_unparsed) == "" then
 		if stream:has_next() then
-			if peek == nil or not peek then 
+			
+			-- If we aren't peeking, read next line
+			-- Also push the state after to prevent newline
+			-- node contents to overwrite our newly read line
+			if peek == nil or not peek then
 				stream:read_next()
 				stream:push()
 			end
@@ -126,18 +145,24 @@ next = function(stream, peek)
 			len = 1
 			offset = 0
 			line = ""
-			update_stream()
+			-- If we weren't in a temporary state this would write
+			-- the newline char contents into stream and overwrite
+			-- the line read in earlier, this only in the case where
+			-- peek is false or nil
+			maybe_update_stream()
 			if peek == nil or not peek then
 				stream:pop()
 			end
 			return node
 		else
+			stream:push()
 			node = create_node.eof()
 			match = ""
 			len = 0
 			offset = 0
 			line = ""
-			update_stream()
+			maybe_update_stream()
+			stream:pop()
 			return node
 		end
 	end
@@ -147,38 +172,38 @@ next = function(stream, peek)
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%a%w*_*%w*")
 	if node == nil and match ~= nil then
 		node = create_node.identifier()
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	-- Operators
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%=")
 	if node == nil and match ~= nil then
 		node = create_node.operator("binary", match, 0)
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%+")
 	if node == nil and match ~= nil then
 		node = create_node.operator("either", match, 1)
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%-")
 	if node == nil and match ~= nil then
 		node = create_node.operator("either", match, 1)
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%*")
 	if node == nil and match ~= nil then
 		node = create_node.operator("binary", match, 2)
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%/")
 	if node == nil and match ~= nil then
 		node = create_node.operator("binary", match, 2)
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 
@@ -186,7 +211,7 @@ next = function(stream, peek)
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%d+%.?%d*")
 	if node == nil and match ~= nil then
 		node = create_node.number()
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 
@@ -194,13 +219,13 @@ next = function(stream, peek)
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%(")
 	if node == nil and match ~= nil then
 		node = create_node.parenthesis()
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	line, match, len, offset = match_pattern(stream.line_unparsed, "%)")
 	if node == nil and match ~= nil then
 		node = create_node.parenthesis()
-		update_stream()
+		maybe_update_stream()
 		return node
 	end
 	
@@ -211,6 +236,7 @@ read_next = function(stream)
 	if stream == nil or stream.lines == nil then return false end
 	if stream.filehandle == nil then return false end
 	local line = stream.lines()
+	print("Read new line "..line)
 	if line == nil then
 		stream.line_txt = ""
 		stream.line_pos = 1
@@ -220,6 +246,7 @@ read_next = function(stream)
 		stream.line_unparsed = line
 		stream.line_nr = (stream.line_nr or 0) + 1
 		stream.line_pos = 1
+		stream.file_pos = stream.filehandle:seek("cur")
 		return true
 	end
 end
@@ -235,6 +262,7 @@ consume = function(stream, tokenType)
 	if stream ~= nil and token.type == tokenType then
 		return stream:next(false)
 	else
+		print("Warning! Consume operation didn't consume expected token")
 		return nil
 	end
 end

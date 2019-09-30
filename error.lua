@@ -23,7 +23,6 @@ module.err = function(node, msg)
 	else
 		print("Unknown syntax error! "..tostring(msg or ""))
 	end
-	--dbg()
 end
 
 module.assert = function(v, n, msg)

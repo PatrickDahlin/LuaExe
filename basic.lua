@@ -6,6 +6,7 @@ local tokenstream = require("tokenstream")
 
 local f = tokenstream.new("mysrc.b")
 
+
 f:push()
 
 local n = f:peek()
@@ -17,7 +18,6 @@ end
 
 f:pop()
 
-
 local ast = parser.parse(f)
 
 parser.printAST(ast)
@@ -27,8 +27,8 @@ io.write("Syntax: ")
 if res then print("OK") else print("ERROR") end
 
 
-local stream = tokenstream.new("mysrc.b")
-stream:next()
+--local stream = tokenstream.new("mysrc.b")
+--stream:next()
 
 print("Done")
 
