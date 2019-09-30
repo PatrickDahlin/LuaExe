@@ -21,12 +21,12 @@ module.err = function(node, msg)
         print(tostring(msg or ""))
 		--print("At symbol: "..tostring(node.type)..","..tostring(node.content or node.op or node.name))
 	else
-		print("Unknown syntax error! "..tostring(msg or ""))
+		print("Unknown compiler error! "..tostring(msg or ""))
 	end
 end
 
 module.assert = function(v, n, msg)
-    if v then return end
+    if v ~= nil and v then return end
     module.err(n, msg)
     os.exit()
 end

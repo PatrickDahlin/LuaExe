@@ -28,7 +28,7 @@ end
 
 local function parse_exp(tok)
 
---	print("TOK: "..tok.line_txt)
+	print("TOK: "..tostring(tok:peek().type))
 	tok:eat_newline()
 	local token = tok:peek()
 	if token == nil or token.type == "EOF" then return nil end
@@ -86,8 +86,6 @@ local function parse_exp(tok)
 			local oldleft = out.left
 			out.left = oldout
 			oldout.right = oldleft
-		else
-			out = nil
 		end
 		token = tok:peek()
 	elseif token.type == "newline" then error("Parser encountered an invalid state! code 93")
@@ -125,7 +123,6 @@ local function parse_exp(tok)
 				out.left = oldout
 				oldout.right = oldleft
 			end
-			--print("EXP, BINOP-Right: "..tostring(out.right))
 	end
 	return out
 end
@@ -164,23 +161,26 @@ module.parse = function(tok)
 	return a
 end
 
-local function print_node(node)
+local function write_space(count)
+	for i=0,count-1, 1 do io.write("   ") end
+end
+
+local function print_node(node, indent)
+	if indent == nil then indent = -1 end
 	if node == nil then return end
 	if node.type == "identifier" then
-		write("(ident:"..tostring(node.name)..")")
+		write_space(indent)
+		print("ident: \""..tostring(node.name).."\"")
 	elseif node.type == "operator" then
-		write("(operator ("..tostring(node.op_type)..") left:")
-		print_node(node.left)
-		write(", '"..tostring(node.op).."', ")
-		write("right:")
-		print_node(node.right)
-		write(")")
+		print_node(node.left, indent + 1)
+		write_space(indent + 1)
+		print("op ("..tostring(node.op_type)..") "..tostring(node.op))
+		print_node(node.right, indent + 1)
 	elseif node.type == "number" then
-		write("(number:"..tostring(node.value)..")")
+		write_space(indent)
+		print("num: "..tostring(node.value))
 	elseif node.type == "exp" then
-		write("(exp: ")
-		print_node(node.exp)
-		write(")")
+		print_node(node.exp, indent)
 	end
 end
 

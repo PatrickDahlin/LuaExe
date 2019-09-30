@@ -31,11 +31,12 @@ module.new = function(filename)
 		line_pos = 1,
 		line_unparsed = "",
 		line_nr = 0,
-		filehandle = io.open(filename, "r"),
 		file = filename,
 		file_pos = 0,
 		states = {} 
 	}
+
+	tokenstream.filehandle = io.open(filename, "r")
 
 	if tokenstream.filehandle == nil then
 		error("Couldn't read file "..filename)

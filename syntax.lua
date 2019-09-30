@@ -55,17 +55,6 @@ local function is_terminal(n, allow_error)
 end
 
 local function is_exp(n, allow_error)
-	--[[local val = is_node(n) and 
-			( (n.type == "exp" and is_exp(n.exp)) or
-			is_num(n) or
-			is_ident(n) or
-				(
-				is_op(n) and 
-				(n.op_type == "binary" or n.op_type == "either") and
-				n.op ~= "=" and
-				is_exp(n.left) and is_exp(n.right)
-				)
-			)]]
 	cond_assert(allow_error, is_node(n), n, "Expected expression")
 	local exp = false
 	local terminal = false
@@ -89,7 +78,6 @@ local function is_exp(n, allow_error)
 			if unary then n.op_type = "unary" end
 		end
 		if binary then
-			--dbg()
 			cond_assert(allow_error, n.left ~= nil and is_exp(n.left, allow_error), n,
 					"Expected left side operand of operator '"..tostring(n.op).."'")
 				binary = binary and n.left ~= nil and is_exp(n.left, allow_error)
