@@ -140,7 +140,7 @@ local function internal_parse(tok)
 	AST.node_count = 0
 	local node = parse_stat(tok)
 	
-	while tok:has_next() and node ~= nil do
+	while node ~= nil do
 		print("Found statement: "..tostring(node.type).."-"..
 				tostring(node.op_type))
 		table.insert(AST.nodes, node)
