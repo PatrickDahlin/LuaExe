@@ -1,5 +1,6 @@
 local parser = require("parser")
 local syntax = require("syntax")
+local emitter = require("asm_emitter")
 local dbg = require("debugger")
 
 local tokenstream = require("tokenstream")
@@ -47,5 +48,32 @@ print("")
 parser.printAST(ast)
 
 
-print("Done")
+local nasm_cmd = "nasm -f win64 build.asm -o build.o"
+local gcc_cmd = "gcc build.o -o build.exe"
 
+-- Delete old build
+os.execute("@del build.exe")
+
+
+
+print("Emitting asm")
+emitter.compile(ast)
+
+print("Emitted build.asm")
+
+local handle = io.popen(nasm_cmd)
+local result = handle:read("*a")
+handle:close()
+
+handle = io.popen(gcc_cmd)
+result = handle:read("*a")
+handle:close()
+
+print("Running application")
+
+handle = io.popen("build.exe")
+result = handle:read("*a")
+handle:close()
+
+print(tostring(result))
+print("Done")
