@@ -125,7 +125,6 @@ next = function(stream, peek)
 
 	if stream.token.type == "BOF" and
 		stream.line_unparsed == "" then
-		print("------------BOF")
 		stream:read_next()
 	end
 
@@ -237,7 +236,6 @@ read_next = function(stream)
 	if stream == nil or stream.lines == nil then return false end
 	if stream.filehandle == nil then return false end
 	local line = stream.lines()
-	print("Read new line "..line)
 	if line == nil then
 		stream.line_txt = ""
 		stream.line_pos = 1

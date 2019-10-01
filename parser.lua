@@ -26,7 +26,7 @@ local function create_node(tok, token, node_type)
 end
 
 
-local function parse_exp(tok)
+local function parse_exp(tok, ast)
 
 	tok:eat_newline()
 	local token = tok:peek()
@@ -38,7 +38,7 @@ local function parse_exp(tok)
 		local begin_tok = token.line
 		tok:consume("parenthesis")
 		out = create_node(tok, token, "exp")
-		out.exp = parse_exp(tok)
+		out.exp = parse_exp(tok, ast)
 		local prev_token = token
 		tok:eat_newline()
 		token = tok:peek()
@@ -52,6 +52,7 @@ local function parse_exp(tok)
 	elseif token.type == "identifier" then
 		out = create_node(tok, token)
 		out.name = token.content
+		ast:addVar(out.name)
 		tok:consume("identifier")
 		tok:eat_newline()
 		token = tok:peek()
@@ -59,6 +60,7 @@ local function parse_exp(tok)
 	elseif token.type == "number" then
 		out = create_node(tok, token)
 		out.value = tonumber(token.content)
+		ast:addConstant(out.value)
 		tok:consume("number")
 		tok:eat_newline()
 		token = tok:peek()
@@ -71,7 +73,7 @@ local function parse_exp(tok)
 		out = create_node(tok, token)
 		out.op = token.content
 		out.op_type = token.op_type
-		out.right = parse_exp(tok)
+		out.right = parse_exp(tok, ast)
 		tok:eat_newline()
 
 		-- Move this to the left branch of next operator since
@@ -97,7 +99,7 @@ local function parse_exp(tok)
 			tok:consume("operator")
 			
 			-- Parse right side of operator
-			local right = parse_exp(tok)
+			local right = parse_exp(tok, ast)
 			local oldOut = out
 			out = create_node(tok, token)
 			out.op_type = "binary"
@@ -125,21 +127,34 @@ local function parse_exp(tok)
 	return out
 end
 
-local function parse_stat(tok)
-	return parse_exp(tok)
+local function parse_stat(tok, ast)
+	return parse_exp(tok, ast)
 end
 
 local function internal_parse(tok)
 	local AST = {}
 	AST.nodes = {}
 	AST.node_count = 0
-	local node = parse_stat(tok)
+
+	-- List of all variables and how many times they are used
+	AST.variables = {}
+	AST.addVar = function(ast, var)
+		ast.variables[var] = (ast.variables[var] or 0) + 1
+	end
+
+	AST.constants = {}
+	AST.addConstant = function(ast, const)
+		ast.constants[const] = (ast.constants[const] or 0) + 1
+	end
+
+
+	local node = parse_stat(tok, AST)
 	
 	while node ~= nil do
 		print("Found statement: "..tostring(node.type).."-"..
 				tostring(node.op_type))
 		table.insert(AST.nodes, node)
-		node = parse_stat(tok)
+		node = parse_stat(tok, AST)
 	end
 
 	if tok:has_next() then
@@ -188,6 +203,16 @@ module.printAST = function(ast)
 
 	for k,node in pairs(ast.nodes) do
 		print_node(node) print("") --newline
+	end
+
+	print("Variables and their usage counts;")
+	for k,v in pairs(ast.variables) do
+		print("	"..tostring(k).." (used: "..v.." times)")
+	end
+
+	print("Constants and their usage counts;")
+	for k,v in pairs(ast.constants) do
+		print("	"..tostring(k).." (used "..v.." times)")
 	end
 
 end
