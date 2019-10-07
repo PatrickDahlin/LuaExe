@@ -115,17 +115,6 @@ end
 
 
 
-local rules = {}
-
-local function add_rule(rule_name, verification_func)
-	local rule = {
-		name = rule_name,
-		verify = verification_func
-	}
-	table.insert(rules, rule)
-end
-
-
 local function verify_op(node, type, symbol, allow_error)
 	local is_bin = node.type == "operator" and 
 			node.op_type == type and 
@@ -148,9 +137,6 @@ local function assign_verification(node)
 	v = v and is_exp(node.right, true)
 	return v
 end
-
-add_rule("assignment",
-			assign_verification)
 
 module.verify = function(ast)
 	for k,v in pairs(ast.nodes) do

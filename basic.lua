@@ -2,6 +2,7 @@ local parser = require("parser")
 local syntax = require("syntax")
 local emitter = require("asm_emitter")
 local dbg = require("debugger")
+local IR = require("IR_translator")
 
 local tokenstream = require("tokenstream")
 
@@ -52,12 +53,16 @@ local nasm_cmd = "nasm -f win64 build.asm -o build.o"
 local gcc_cmd = "gcc build.o -o build.exe"
 
 -- Delete old build
-os.execute("@del build.exe")
+--os.execute("@del build.exe")
 
+local ir = IR.translate(ast)
 
+for k,v in pairs(ir.code) do
+	print(v.type.." "..tostring(v.reg1 or v.size).. " "..tostring(v.reg2 or ""))
+end
 
-print("Emitting asm")
-emitter.compile(ast)
+--print("Emitting asm")
+--[[emitter.compile(ast)
 
 print("Emitted build.asm")
 
@@ -76,4 +81,5 @@ result = handle:read("*a")
 handle:close()
 
 print(tostring(result))
+]]
 print("Done")

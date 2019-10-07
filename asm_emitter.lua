@@ -1,10 +1,30 @@
 local module = {}
 
+--[[
+
+	When allocating push stack marker
+	which is assigned to the variable
+
+	If the variable is needed then just
+	calculate the diff between the var
+	marker and current stack marker
+	which will be the offset for rsp
+
+
+
+	!!
+	THIS IS JUST AN EXPERIMENT IN HOW TO HANDLE OUTPUT
+	!!
+
+]]
+
+
+
 local instru = {
-	["alloc8"]  = {asm="sub rsp, 8", size=8},
-	["alloc16"] = {asm="sub rsp, 16", size=16},
-	["alloc32"] = {asm="sub rsp, 32", size=32},
-	["alloc64"] = {asm="sub rsp, 64", size=64}
+	["alloc8"]  = {asm="sub rsp, 8",  type="alloc", size=8},
+	["alloc16"] = {asm="sub rsp, 16", type="alloc", size=16},
+	["alloc32"] = {asm="sub rsp, 32", type="alloc", size=32},
+	["alloc64"] = {asm="sub rsp, 64", type="alloc", size=64}
 }
 
 local function init_IR()
@@ -15,15 +35,18 @@ local function init_IR()
 end
 
 local function alloc_stack(IR, size, note)
-	local addr = IR.stack_pointer
-	local emit = instru[size].asm
+	local emit = {}
+	emit.asm = instru[size].asm
+	emit.type = instru[size].type
+	emit.size = instru[size].size	
+--	local emit = instru[size]
 	if note ~= nil then 
-		emit = emit .. "; "..tostring(note)
+		emit.asm = emit.asm .. "; "..tostring(note)
 	end
 
 	table.insert(IR.instructions, emit)
 	IR.stack_pointer = IR.stack_pointer + instru[size].size
-	return addr
+	return IR.stack_pointer
 end
 
 local function alloc_stack_int64(IR,variable)
@@ -35,7 +58,7 @@ end
 local function emit_instructions(f, IR)
 	for k,v in pairs(IR.instructions) do
 		f:write("	")
-		f:write(v)
+		f:write(v.asm)
 		f:write("\n")
 	end
 end
@@ -68,6 +91,23 @@ local function emit_IR(IR)
 	f:close()
 end
 
+
+local function emit_assign(IR, s, var)
+	
+	-- mov
+	local instruction = {}
+	instruction.asm = "mov rdx, qword "
+	instruction.asm = instruction.asm .. tostring(s.right.value)
+	table.insert(IR.instructions, instruction)
+	
+	instruction = {}
+	instruction.asm = "mov [rsp-"
+	instruction.asm = instruction.asm .. tostring(IR.stack_pointer - var.address)
+	instruction.asm = instruction.asm .. "], rdx"
+
+	table.insert(IR.instructions, instruction)
+end
+
 module.compile = function(ast, outname)
 	-- ast.nodes contains all statements
 	-- ast.variables for all variables used
@@ -86,6 +126,13 @@ module.compile = function(ast, outname)
 		tmp.name = v
 		tmp.address = "nil"
 		alloc_stack_int64(IR, tmp)
+		vars[v] = tmp
+	end
+
+	for k,s in pairs(ast.nodes) do
+		if s.type == "operator" and s.op_type == "binary" and s.op == "=" then
+			emit_assign(IR, s, vars[s.left.name])
+		end
 	end
 
 	emit_IR(IR)
