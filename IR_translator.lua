@@ -1,4 +1,5 @@
 local dbg = require("debugger")
+local error = require("error")
 local module = {}
 
 
@@ -16,6 +17,7 @@ local function setup_stack(IR)
 
 	stack.variables = {}
 	stack.ptr = 0
+	stack.alloc_index = 0
 
 	stack.pop_destroyed = function()
 		if #stack.variables > 0 and
@@ -33,23 +35,52 @@ local function setup_stack(IR)
 
 	stack.alloc = function(s, t)
 		local var = {
+			index = stack.alloc_index +1,
 			tag = t,
 			size = s,
+			offset = 0,
 			destroyed = false
 		}
 		stack.pop_destroyed()
+		stack.alloc_index = stack.alloc_index + 1
 		table.insert(stack.variables, var)
 		local ins = {}
 		ins.type = "alloc"
 		ins.size = s
+		ins.tag = t
 		stack.ptr = stack.ptr + s
 		
 		table.insert(IR.code, ins)
-		return "[rsp-?]"
+		return stack.alloc_index
 	end
 
 	stack.dealloc = function(tag)
 		stack.variables[tag].destroyed = true
+	end
+
+	stack.has_tag = function(tag)
+		for k,v in pairs(stack.variables) do
+			if v.tag == tag then return true end
+		end
+		return false
+	end
+
+	stack.get_tag = function(tag)
+		for k,v in pairs(stack.variables) do
+			if v.tag == tag then return v end
+		end
+		return nil
+	end
+
+	stack.calc_rsp = function(index)
+		if index > stack.alloc_index then return -1 end
+		local offset = 0
+
+		for i=#stack.variables, 1, -1 do
+			if stack.variables[i].index == index then break end
+			offset = offset + stack.variables[i].size
+		end
+		return "[rsp-"..offset.."]"
 	end
 
 	IR.stack = stack
@@ -105,19 +136,31 @@ local function parse_bin(IR, node)
 	local op_node = node
 
 	local left, right
+	local is_l_index = true
+	local is_r_index = true
 
 	if node.left.type == "number" then
 		left = tostring(node.left.value)
+		is_l_index = false
 	end
 	if node.right.type == "number" then
 		right = tostring(node.right.value)
+		is_r_index = false
 	end
 
 	if node.left.type == "identifier" then
-		left = node.left.name
+		left = IR.stack.get_tag(node.left.name)
+		error.assert(left ~= nil,
+					node.left,
+					"Use of undeclared variable '"..node.left.name.."'")
+		left = left.index
 	end
 	if node.right.type == "identifier" then
-		right = node.right.name
+		right = IR.stack.get_tag(node.right.name)
+		error.assert(right ~= nil, 
+					node.right, 
+					"Use of undeclared variable '"..node.right.name.."'")
+		right = right.index
 	end
 
 	if left == nil and node.left.type == "operator" then
@@ -151,11 +194,18 @@ local function parse_bin(IR, node)
 		["/"] = ir_div
 	}
 
+	if is_l_index then
+		left = IR.stack.calc_rsp(left)
+	end
+	if is_r_index then
+		right = IR.stack.calc_rsp(right)
+	end
+
 	ir_mov(IR, "r10", left)
 	ir_mov(IR, "r11", right)
 	op_list[op_node.op](IR)
 	local result = IR.stack.alloc(64)
-	ir_mov(IR, result, "r10")
+	ir_mov(IR, IR.stack.calc_rsp(result), "r10")
 
 	return result
 end
@@ -163,7 +213,15 @@ end
 local function parse_assign(IR, node)
 	local assign_node = node
 	node = node.right
-	if node == nil then error("A") end
+
+	local addr = IR.stack.get_tag(assign_node.left.name)
+	if addr == nil then
+		addr = IR.stack.alloc(64, assign_node.left.name)
+	else
+		addr = addr.index
+	end
+
+	if node == nil then error("huh") end
 
 	local alloc = false
 	local result_addr
@@ -172,17 +230,23 @@ local function parse_assign(IR, node)
 	elseif node.type == "operator" and node.op_type == "unary" then
 		result_addr = parse_un(IR, node)
 	elseif node.type == "number" then
+
 		result_addr = tostring(node.value)
-		alloc = true
+		ir_mov(IR, IR.stack.calc_rsp(addr), result_addr)
+		result_addr = addr
+
 	elseif node.type == "identifier" then
 		result_addr = tostring(node.name)
+		local has = IR.stack.has_tag(node.name)
+		assert(has)
+		result_addr = IR.stack.get_tag(node.name).index
+		
 		alloc = true
 	end
 	
 	-- Allocate output
 	if alloc then
-		local addr = IR.stack.alloc(64, assign_node.name)
-		ir_mov(IR, addr, result_addr)
+		ir_mov(IR, IR.stack.calc_rsp(addr), IR.stack.calc_rsp(result_addr))
 		result_addr = addr
 	end
 

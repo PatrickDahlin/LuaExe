@@ -58,7 +58,7 @@ local gcc_cmd = "gcc build.o -o build.exe"
 local ir = IR.translate(ast)
 
 for k,v in pairs(ir.code) do
-	print(v.type.." "..tostring(v.reg1 or v.size).. " "..tostring(v.reg2 or ""))
+	print(v.type.." "..tostring(v.reg1 or v.size).. " "..tostring(v.reg2 or "").." "..tostring(v.tag or ""))
 end
 
 --print("Emitting asm")
