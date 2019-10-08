@@ -146,8 +146,31 @@ local function ir_add(IR, cmt)
 	table.insert(IR.code, ins)
 end
 
+local function ir_neg(IR, n)
+	local ins = {}
+	ins.type = "NEG"
+	ins.reg1 = n
+	table.insert(IR.code, ins)
+end
+
 local function parse_un(IR, node)
-	return node.op .. tostring(node.right.value)
+	
+	local num
+	if node.right.type == "exp" then
+		num = parse_bin(IR, node.right.exp)
+		ir_mov(IR, "rax", IR.stack.calc_rsp(num))
+	elseif node.right.type == "identifier" then
+		num = IR.stack.get_tag(node.right.name)
+		num = num.index
+		ir_mov(IR, "rax", IR.stack.calc_rsp(num))
+	elseif node.right.type == "number" then
+		num = IR.stack.alloc(64)
+		ir_mov(IR, "rax", node.right.value)
+	end
+
+	ir_neg(IR, "rax")
+	ir_mov(IR, IR.stack.calc_rsp(num), "rax")
+	return num
 end
 
 local function parse_bin(IR, node)
@@ -158,7 +181,7 @@ local function parse_bin(IR, node)
 	local is_l_index = true
 	local is_r_index = true
 
-	if node.left.type == "number" then
+	if node.left ~= nil and node.left.type == "number" then
 		left = tostring(node.left.value)
 		is_l_index = false
 	end
@@ -167,7 +190,7 @@ local function parse_bin(IR, node)
 		is_r_index = false
 	end
 
-	if node.left.type == "identifier" then
+	if node.left ~= nil and node.left.type == "identifier" then
 		left = IR.stack.get_tag(node.left.name)
 		error.assert(left ~= nil,
 					node.left,
@@ -182,7 +205,7 @@ local function parse_bin(IR, node)
 		right = right.index
 	end
 
-	if left == nil and node.left.type == "operator" then
+	if left == nil and node.left ~= nil and node.left.type == "operator" then
 		if node.left.op_type == "binary" then
 			left = parse_bin(IR, node.left)
 		elseif node.left.op_type == "unary" then
@@ -198,11 +221,37 @@ local function parse_bin(IR, node)
 	end
 
 	-- This may break if unary statement on either side but will do for now
-	if left == nil and node.left.type == "exp" then
-		left = parse_bin(IR, node.left.exp)
+	if left == nil and node.left ~= nil and node.left.type == "exp" then
+		local exp = node.left.exp
+		if exp.type == "operator" and exp.op_type == "binary" then
+			left = parse_bin(IR, exp)
+		elseif exp.type == "operator" and exp.op_type == "unary" then
+			left = parse_un(IR, exp)
+		elseif exp.type == "number" then
+			left = tonumber(exp.value)
+		elseif exp.type == "identifier" then
+			left = IR.stack.get_tag(exp.name)
+			error.assert(left ~= nil,
+							exp,
+							"Use of undeclared variable '"..exp.name.."'")
+			left = left.index
+		end
 	end
 	if right == nil and node.right.type == "exp" then
-		right = parse_bin(IR, node.right.exp)
+		local exp = node.right.exp
+		if exp.type == "operator" and exp.op_type == "binary" then
+			right = parse_bin(IR, node.right.exp)
+		elseif exp.type == "operator" and exp.op_type == "unary" then
+			right = parse_un(IR, exp)
+		elseif exp.type == "number" then
+			right = tonumber(exp.value)
+		elseif exp.type == "identifier" then
+			right = IR.stack.get_tag(exp.name)
+			error.assert(right ~= nil,
+							exp,
+							"Use of undeclared variable '"..exp.name.."'")
+			right = right.index
+		end
 	end
 	
 
@@ -265,6 +314,9 @@ local function parse_assign(IR, node)
 		ir_mov(IR, "rax", IR.stack.calc_rsp(result_addr), "Load var into reg")
 
 		alloc = true
+	elseif node.type == "exp" then
+		local exp = node.exp
+		---TODO
 	end
 	
 	-- Allocate output

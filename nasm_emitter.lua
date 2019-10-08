@@ -27,7 +27,8 @@ local function emit_ir(ir, output)
 		["ADD"] = "add ",
 		["SUB"] = "sub ",
 		["MUL"] = "mul ",
-		["DIV"] = "div "
+		["DIV"] = "div ",
+		["NEG"] = "neg "
 	}
 
 	for k,v in pairs(ir.code) do
