@@ -48,6 +48,7 @@ local function setup_stack(IR)
 		ins.type = "alloc"
 		ins.size = s
 		ins.tag = t
+		ins.cmt = "stack alloc for "..(t or "")
 		stack.ptr = stack.ptr + s
 		
 		table.insert(IR.code, ins)
@@ -80,50 +81,68 @@ local function setup_stack(IR)
 			if stack.variables[i].index == index then break end
 			offset = offset + stack.variables[i].size
 		end
-		return "[rsp-"..offset.."]"
+		return "qword [rsp+"..offset.."]"
 	end
 
 	IR.stack = stack
 	return stack
 end
 
-local function ir_mov(IR, to, from)
+-- Moves contents of register 2 into register 1
+local function ir_mov(IR, to, from, cmt)
 	local ins = {}
 	ins.type = "MOV"
 	ins.reg1 = to
 	ins.reg2 = from
+	ins.cmt = cmt
 	table.insert(IR.code, ins)
 end
 
-local function ir_div(IR)
+-- Gets the effective address from register2 and stores that in register 1
+local function ir_lea(IR, to, from, cmt)
+	local ins = {}
+	ins.type = "LEA"
+	ins.reg1 = to
+	ins.reg2 = from
+	ins.cmt = cmt
+	table.insert(IR.code, ins)
+end
+
+-- Integer division with "rax" where answer is stored in rax
+local function ir_div(IR, cmt)
 	local ins = {}
 	ins.type = "DIV"
 	ins.reg1 = "r10"
-	ins.reg2 = "r11"
+	ins.cmt = cmt
 	table.insert(IR.code, ins)
 end
 
-local function ir_mul(IR)
+-- Multiply rax with r10 and store answer in rax
+local function ir_mul(IR, cmt)
 	local ins = {}
 	ins.type = "MUL"
 	ins.reg1 = "r10"
-	ins.reg2 = "r11"
+	ins.cmt = cmt
 	table.insert(IR.code, ins)
 end
 
-local function ir_sub(IR)
+-- Subtract rax and r10 and store result in rax
+local function ir_sub(IR, cmt)
 	local ins = {}
 	ins.type = "SUB"
-	ins.reg1 = "r10"
-	ins.reg2 = "r11"
+	ins.reg1 = "rax"
+	ins.reg2 = "r10"
+	ins.cmt = cmt
 	table.insert(IR.code, ins)
 end
 
-local function ir_add(IR)
+-- Add rax and r10 and store in rax
+local function ir_add(IR, cmt)
 	local ins = {}
 	ins.type = "ADD"
-	ins.reg1 = "r10"
-	ins.reg2 = "r11"
+	ins.reg1 = "rax"
+	ins.reg2 = "r10"
+	ins.cmt = cmt
 	table.insert(IR.code, ins)
 end
 
@@ -201,11 +220,11 @@ local function parse_bin(IR, node)
 		right = IR.stack.calc_rsp(right)
 	end
 
-	ir_mov(IR, "r10", left)
-	ir_mov(IR, "r11", right)
-	op_list[op_node.op](IR)
+	ir_mov(IR, "rax", left, "Prep a")
+	ir_mov(IR, "r10", right, "Prep b")
+	op_list[op_node.op](IR, "Perform arith")
 	local result = IR.stack.alloc(64)
-	ir_mov(IR, IR.stack.calc_rsp(result), "r10")
+	ir_mov(IR, IR.stack.calc_rsp(result), "rax", "Result into stack")
 
 	return result
 end
@@ -227,12 +246,15 @@ local function parse_assign(IR, node)
 	local result_addr
 	if node.type == "operator" and node.op_type == "binary" then
 		result_addr = parse_bin(IR, node)
+		alloc = true
 	elseif node.type == "operator" and node.op_type == "unary" then
 		result_addr = parse_un(IR, node)
+		alloc = true
 	elseif node.type == "number" then
 
 		result_addr = tostring(node.value)
-		ir_mov(IR, IR.stack.calc_rsp(addr), result_addr)
+		ir_mov(IR, "rax", result_addr)
+		ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Load immediate to stack")
 		result_addr = addr
 
 	elseif node.type == "identifier" then
@@ -240,13 +262,14 @@ local function parse_assign(IR, node)
 		local has = IR.stack.has_tag(node.name)
 		assert(has)
 		result_addr = IR.stack.get_tag(node.name).index
-		
+		ir_mov(IR, "rax", IR.stack.calc_rsp(result_addr), "Load var into reg")
+
 		alloc = true
 	end
 	
 	-- Allocate output
 	if alloc then
-		ir_mov(IR, IR.stack.calc_rsp(addr), IR.stack.calc_rsp(result_addr))
+		ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Store rax temp into stack")
 		result_addr = addr
 	end
 
