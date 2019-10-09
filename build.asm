@@ -6,29 +6,28 @@ section .text
 main:
 	sub rsp, 32
 	mov rdx, -1
-	sub rsp, qword 64		;stack alloc for a
+	sub rsp, qword 64		;stack alloc for 
+	mov qword [rsp+0], qword 19		;
 	sub rsp, qword 64		;stack alloc for 
 	mov rax, qword 1		;
 	neg rax		;
 	mov qword [rsp+0], rax		;
-	mov rax, qword 19		;Prep a
-	mov r10, qword [rsp+0]		;Prep b
-	mul r10		;Perform arith
+	mov rax, qword [rsp+64]		;Prep left
+	mov r10, qword [rsp+0]		;Prep right
+	mul r10		;
 	sub rsp, qword 64		;stack alloc for 
 	mov qword [rsp+0], rax		;Result into stack
-	mov qword [rsp+128], rax		;Store rax temp into stack
+	sub rsp, qword 64		;stack alloc for a
+	mov qword [rsp+0], rax		;Store rax temp into stack
+	sub rsp, qword 64		;stack alloc for 
+	mov qword [rsp+0], qword 1		;
+	mov rax, qword [rsp+64]		;Prep left
+	mov r10, qword [rsp+0]		;Prep right
+	sub rax, r10		;
+	sub rsp, qword 64		;stack alloc for 
+	mov qword [rsp+0], rax		;Result into stack
 	sub rsp, qword 64		;stack alloc for myvar
-	mov rax, qword [rsp+192]		;Prep a
-	mov r10, qword [rsp+192]		;Prep b
-	mul r10		;Perform arith
-	sub rsp, qword 64		;stack alloc for 
-	mov qword [rsp+0], rax		;Result into stack
-	mov rax, qword [rsp+256]		;Prep a
-	mov r10, qword [rsp+0]		;Prep b
-	mul r10		;Perform arith
-	sub rsp, qword 64		;stack alloc for 
-	mov qword [rsp+0], rax		;Result into stack
-	mov qword [rsp+128], rax		;Store rax temp into stack
+	mov qword [rsp+0], rax		;Store rax temp into stack
 	mov rdx, rax
 	mov rcx, msg
 	call printf

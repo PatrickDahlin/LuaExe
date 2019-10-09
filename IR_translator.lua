@@ -153,11 +153,14 @@ local function ir_neg(IR, n)
 	table.insert(IR.code, ins)
 end
 
+local parse_exp
+
 local function parse_un(IR, node)
+	error.assert(node.right ~= nil, node, "Expected unary expression")
 	
 	local num
 	if node.right.type == "exp" then
-		num = parse_bin(IR, node.right.exp)
+		num = parse_exp(IR, node.right.exp)
 		ir_mov(IR, "rax", IR.stack.calc_rsp(num))
 	elseif node.right.type == "identifier" then
 		num = IR.stack.get_tag(node.right.name)
@@ -168,92 +171,50 @@ local function parse_un(IR, node)
 		ir_mov(IR, "rax", node.right.value)
 	end
 
+	-- Only unary op is currently negation so just use it
+
 	ir_neg(IR, "rax")
 	ir_mov(IR, IR.stack.calc_rsp(num), "rax")
 	return num
 end
 
-local function parse_bin(IR, node)
+local parse_bin
+
+parse_exp = function(IR, node)
+	if node == nil then return -1 end
+
+	local out_index
+
+	if node.type == "operator" then
+		if node.op_type == "binary" then
+			out_index = parse_bin(IR, node)
+		elseif node.op_type == "unary" then
+			out_index = parse_un(IR, node)
+		end
+	elseif node.type == "identifier" then
+		local a = IR.stack.get_tag(node.name)
+		error.assert(a ~= nil, node,
+						"Use of undeclared variable '"..node.name.."'")
+		out_index = a.index
+	elseif node.type == "number" then
+		out_index = IR.stack.alloc(64)
+		ir_mov(IR, IR.stack.calc_rsp(out_index), tostring(node.value))
+	elseif node.type == "exp" then
+		return parse_exp(IR, node.exp)
+	end
+
+	return out_index
+end
+
+parse_bin = function(IR, node)
 	if node == nil then return "err" end
 	local op_node = node
 
 	local left, right
-	local is_l_index = true
-	local is_r_index = true
-
-	if node.left ~= nil and node.left.type == "number" then
-		left = tostring(node.left.value)
-		is_l_index = false
-	end
-	if node.right.type == "number" then
-		right = tostring(node.right.value)
-		is_r_index = false
-	end
-
-	if node.left ~= nil and node.left.type == "identifier" then
-		left = IR.stack.get_tag(node.left.name)
-		error.assert(left ~= nil,
-					node.left,
-					"Use of undeclared variable '"..node.left.name.."'")
-		left = left.index
-	end
-	if node.right.type == "identifier" then
-		right = IR.stack.get_tag(node.right.name)
-		error.assert(right ~= nil, 
-					node.right, 
-					"Use of undeclared variable '"..node.right.name.."'")
-		right = right.index
-	end
-
-	if left == nil and node.left ~= nil and node.left.type == "operator" then
-		if node.left.op_type == "binary" then
-			left = parse_bin(IR, node.left)
-		elseif node.left.op_type == "unary" then
-			left = parse_un(IR, node.left)
-		end
-	end
-	if right == nil and node.right.type == "operator" then
-		if node.right.op_type == "binary" then
-			right = parse_bin(IR, node.right)
-		elseif node.right.op_type == "unary" then
-			right = parse_un(IR, node.right)
-		end
-	end
-
-	-- This may break if unary statement on either side but will do for now
-	if left == nil and node.left ~= nil and node.left.type == "exp" then
-		local exp = node.left.exp
-		if exp.type == "operator" and exp.op_type == "binary" then
-			left = parse_bin(IR, exp)
-		elseif exp.type == "operator" and exp.op_type == "unary" then
-			left = parse_un(IR, exp)
-		elseif exp.type == "number" then
-			left = tonumber(exp.value)
-		elseif exp.type == "identifier" then
-			left = IR.stack.get_tag(exp.name)
-			error.assert(left ~= nil,
-							exp,
-							"Use of undeclared variable '"..exp.name.."'")
-			left = left.index
-		end
-	end
-	if right == nil and node.right.type == "exp" then
-		local exp = node.right.exp
-		if exp.type == "operator" and exp.op_type == "binary" then
-			right = parse_bin(IR, node.right.exp)
-		elseif exp.type == "operator" and exp.op_type == "unary" then
-			right = parse_un(IR, exp)
-		elseif exp.type == "number" then
-			right = tonumber(exp.value)
-		elseif exp.type == "identifier" then
-			right = IR.stack.get_tag(exp.name)
-			error.assert(right ~= nil,
-							exp,
-							"Use of undeclared variable '"..exp.name.."'")
-			right = right.index
-		end
-	end
 	
+	left = parse_exp(IR, node.left)
+	right = parse_exp(IR, node.right)
+
 
 	local op_list = {
 		["+"] = ir_add,
@@ -262,25 +223,25 @@ local function parse_bin(IR, node)
 		["/"] = ir_div
 	}
 
-	if is_l_index then
-		left = IR.stack.calc_rsp(left)
-	end
-	if is_r_index then
-		right = IR.stack.calc_rsp(right)
-	end
 
-	ir_mov(IR, "rax", left, "Prep a")
-	ir_mov(IR, "r10", right, "Prep b")
-	op_list[op_node.op](IR, "Perform arith")
+	ir_mov(IR, "rax", IR.stack.calc_rsp(left), "Prep left")
+	ir_mov(IR, "r10", IR.stack.calc_rsp(right), "Prep right")
+	op_list[op_node.op](IR, "")
 	local result = IR.stack.alloc(64)
 	ir_mov(IR, IR.stack.calc_rsp(result), "rax", "Result into stack")
 
 	return result
 end
 
+
 local function parse_assign(IR, node)
 	local assign_node = node
 	node = node.right
+
+
+	if node == nil then error("huh") end
+
+	local result_addr = parse_exp(IR, node)
 
 	local addr = IR.stack.get_tag(assign_node.left.name)
 	if addr == nil then
@@ -289,41 +250,8 @@ local function parse_assign(IR, node)
 		addr = addr.index
 	end
 
-	if node == nil then error("huh") end
-
-	local alloc = false
-	local result_addr
-	if node.type == "operator" and node.op_type == "binary" then
-		result_addr = parse_bin(IR, node)
-		alloc = true
-	elseif node.type == "operator" and node.op_type == "unary" then
-		result_addr = parse_un(IR, node)
-		alloc = true
-	elseif node.type == "number" then
-
-		result_addr = tostring(node.value)
-		ir_mov(IR, "rax", result_addr)
-		ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Load immediate to stack")
-		result_addr = addr
-
-	elseif node.type == "identifier" then
-		result_addr = tostring(node.name)
-		local has = IR.stack.has_tag(node.name)
-		assert(has)
-		result_addr = IR.stack.get_tag(node.name).index
-		ir_mov(IR, "rax", IR.stack.calc_rsp(result_addr), "Load var into reg")
-
-		alloc = true
-	elseif node.type == "exp" then
-		local exp = node.exp
-		---TODO
-	end
-	
-	-- Allocate output
-	if alloc then
-		ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Store rax temp into stack")
-		result_addr = addr
-	end
+	ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Store rax temp into stack")
+	result_addr = addr
 
 	-- Result is on the stack at result_addr
 end
