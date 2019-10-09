@@ -223,9 +223,11 @@ parse_bin = function(IR, node)
 		["/"] = ir_div
 	}
 
-
-	ir_mov(IR, "rax", IR.stack.calc_rsp(left), "Prep left")
-	ir_mov(IR, "r10", IR.stack.calc_rsp(right), "Prep right")
+	local reg1 = "rax"
+	local reg2 = "r10"
+	
+	ir_mov(IR, reg1, IR.stack.calc_rsp(left), "Prep left")
+	ir_mov(IR, reg2, IR.stack.calc_rsp(right), "Prep right")
 	op_list[op_node.op](IR, "")
 	local result = IR.stack.alloc(64)
 	ir_mov(IR, IR.stack.calc_rsp(result), "rax", "Result into stack")

@@ -28,6 +28,23 @@ main:
 	mov qword [rsp+0], rax		;Result into stack
 	sub rsp, qword 64		;stack alloc for myvar
 	mov qword [rsp+0], rax		;Store rax temp into stack
+	mov rax, qword [rsp+0]		;
+	neg rax		;
+	mov qword [rsp+0], rax		;
+	sub rsp, qword 64		;stack alloc for 
+	mov rax, qword 2		;
+	neg rax		;
+	mov qword [rsp+0], rax		;
+	mov rax, qword [rsp+64]		;Prep left
+	mov r10, qword [rsp+0]		;Prep right
+	xor rdx, rdx
+	idiv r10		;
+	sub rsp, qword 64		;stack alloc for 
+	mov qword [rsp+0], rax		;Result into stack
+	mov rax, qword [rsp+0]		;
+	neg rax		;
+	mov qword [rsp+0], rax		;
+	mov qword [rsp+128], rax		;Store rax temp into stack
 	mov rdx, rax
 	mov rcx, msg
 	call printf

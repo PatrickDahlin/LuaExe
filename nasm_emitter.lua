@@ -27,7 +27,7 @@ local function emit_ir(ir, output)
 		["ADD"] = "add ",
 		["SUB"] = "sub ",
 		["MUL"] = "mul ",
-		["DIV"] = "div ",
+		["DIV"] = "xor rdx, rdx\n\tidiv ",
 		["NEG"] = "neg "
 	}
 
