@@ -107,13 +107,13 @@ local function parse_exp(tok, ast)
 			out.op = token.content
 			out.left = oldOut
 			out.right = right
-			
+			if out.precedence == nil then dbg() end
 			-- Compare predecences and switch if needed
 			-- (unary has left = nil and right = exp hence the switch)
 			if right ~= nil and right.type == "operator" and 
 				right.op_type == "binary" and 
 				(right.precedence < out.precedence or
-				out.type == "operator" and 
+				out.type == "operator" and
 				(out.op_type == "unary" or 
 				out.op_type == "either")) then
 				

@@ -289,7 +289,7 @@ pop = function(stream)
 		local pos = stream.file_pos
 		if pos < 0 then pos = 0 end
 		stream.filehandle:seek("set", pos)
-		stream.lines = stream.filehandle:lines()
+		stream.lines = stream.filehandle:lines
 	end
 end
 

@@ -4,10 +4,46 @@ local emitter = require("nasm_emitter")
 local dbg = require("debugger")
 local IR = require("IR_translator")
 
-local tokenstream = require("tokenstream")
+--local tokenstream = require("tokenstream")
+local adaptivestream = require("adaptivetokenstream")
 
-local f = tokenstream.new("mysrc.b")
+--local f = tokenstream.new("mysrc.b")
+local f = adaptivestream.new("mysrc.b")
 
+local num_cb = function(n) n.value = tonumber(n.content); return n end
+local op_cb = function(n)
+	if 	   n.content == "=" then n.op_type = "binary"
+								 n.precedence = 0
+	elseif n.content == "+" then n.op_type = "either"
+								 n.precedence = 1
+	elseif n.content == "-" then n.op_type = "either"
+								 n.precedence = 1
+	elseif n.content == "*" then n.op_type = "binary"
+								 n.precedence = 2
+	elseif n.content == "/" then n.op_type = "binary"
+								 n.precedence = 2
+	elseif n.content == "%" then n.op_type = "binary"
+								 n.precedence = 2
+	elseif n.content == "++" then n.op_type = "unary"
+								 n.precedence = 3
+	elseif n.content == "--" then n.op_type = "unary"
+								 n.precedence = 3
+	end
+	n.op = n.content
+	return n
+end
+
+f:add_token_match("%a%w*_*%w*", "identifier")
+f:add_token_match("%d+", "number", num_cb)
+f:add_token_match("%+%+", "operator", op_cb)
+f:add_token_match("%+", "operator", op_cb)
+f:add_token_match("%-%-", "operator", op_cb)
+f:add_token_match("%-", "operator", op_cb)
+f:add_token_match("%*", "operator", op_cb)
+f:add_token_match("%/", "operator", op_cb)
+f:add_token_match("%(", "parenthesis")
+f:add_token_match("%)", "parenthesis")
+f:add_token_match("%=", "operator", op_cb)
 
 f:push()
 
@@ -32,7 +68,20 @@ f:close()
 f = nil
 
 local start = os.clock()
-f = tokenstream.new("mysrc.b")
+--f = tokenstream.new("mysrc.b")
+f = adaptivestream.new("mysrc.b")
+
+f:add_token_match("%a%w*_*%w*", "identifier")
+f:add_token_match("%d+", "number", num_cb)
+f:add_token_match("%+%+", "operator", op_cb)
+f:add_token_match("%+", "operator", op_cb)
+f:add_token_match("%-%-", "operator", op_cb)
+f:add_token_match("%-", "operator", op_cb)
+f:add_token_match("%*", "operator", op_cb)
+f:add_token_match("%/", "operator", op_cb)
+f:add_token_match("%(", "parenthesis")
+f:add_token_match("%)", "parenthesis")
+f:add_token_match("%=", "operator", op_cb)
 
 local ast = parser.parse(f)
 
