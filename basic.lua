@@ -134,3 +134,45 @@ handle:close()
 print(tostring(result))
 --]]
 print("Done")
+
+
+--[[
+
+chunk, stat, block, laststat, varlist, explist
+
+optional means only *one* instance may exist while
+repeat means 0 or more may exist.
+
+chunk.description = {
+[1] = {
+	{_stat, optional = false, repeat = true},
+	{_laststat, optional = true, repeat = false}
+}
+}
+
+_stat.desc = {
+[1] = {
+	{stat, repeat = true},
+	{";", optional = true}
+}
+}
+
+_laststat.desc = {
+[1] = {
+	{laststat, optional = true},
+	{";", optional = true}
+}
+}
+
+laststat.desc = {
+[1] = {
+	{"return"},
+	{explist, optional = true},
+},
+[2] = {
+	{"break"}
+}
+}
+
+
+]]

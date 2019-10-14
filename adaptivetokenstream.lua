@@ -153,6 +153,7 @@ local function _internal_parse(stream)
 			node = _make_node(stream, "newline", "\n")
 			_move_stream(stream, 1, line)
 			stream.line_txt = line
+			stream.line_pos = 0
 		end
 	end
 
