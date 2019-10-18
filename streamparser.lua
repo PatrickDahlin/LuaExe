@@ -60,6 +60,10 @@ local function maybe_eat(stream, t_type)
 	return false
 end
 
+local function ensure(stream, t_type)
+	local t = check_keyword(stream.peek())
+	error.assert(t.type == t_type, t, "Expected token "..t_type)
+end
 
 local function make_var(stream)
 	if stream.peek().type == "identifier" then
@@ -98,50 +102,81 @@ local function prefixexp(stream)
 	end
 end
 
+-- Parse Prefix as far as possible
+-- The type of the last expression is returned as second value
+-- The root node is returned as first value
+-- Use "next" of nodes to traverse
+local function eval_prefix(stream)
+	local peek = check_keyword(stream.peek())
+	local prefix
+
+	error.assert(peek.type == "identifier" ||
+				peek.type == "lparen", peek, "Expected identifier or expression")
+
+	local last_type = ""
+	-- Eat Name or ( exp ) as first prefix
+	if peek.type == "identifier" then
+		prefix = {type="var", name=peek.content}
+		eat("identifier")
+		last_type = "var"
+	elseif peek.type == "lparen" then
+		prefix = {type="exp", exp=exp(stream)}
+		eat("rparen")
+		last_type = "exp"
+	end
+
+	local parsed = true
+	while parsed do
+		local new_exp
+		parsed = false
+		peek = check_keyword(stream.peek())
+		if peek.type == "lsqbracket" then
+			-- exp (var)
+			-- ]
+			new_exp = {type="var_index", exp=exp(stream)}
+			eat("rsqbracket")
+			parsed = true
+			last_type = "var_index"
+		elseif peek.type == "dot" then
+			-- Name (var)
+			eat("dot")
+			ensure("identifier")
+			new_exp = {type="var_member", name=stream.peek().content}
+			eat("identifier")
+			parsed = true
+			last_type = "var_member"
+		elseif peek.type == "colon" then
+			-- Name (func)
+			-- Args
+			eat("colon")
+			ensure("identifier")
+			new_exp = {type="func_call", 
+						name=stream.peek().content,
+						args=args(stream)}
+			parsed = true
+			last_type = "func_call"
+		end
+		local a = args(stream)
+		if a ~= nil then
+			-- Var with arguments (func)
+			new_exp = {type="func_call", args=a}
+			parsed = true
+			last_type = "func_call"
+		end
+
+		if parsed then
+			prefix.next = new_exp
+		end
+	end
+
+	return prefix, last_type
+end--the world
+
 
 -- Parse variable, has to begin with either identifier or a leftparen
 --  since we can have expression following member access
 local function var(stream)
-	local peek = check_keyword(stream.peek())
-	if not (peek.type == "identifier" or peek.type == "lparen") then
-		return nil
-	end
-
-	local n, force_next
-	if peek.type = "lparen" then
-		
-		n = {type="var",prefixexp=prefixexp(stream)}
-
-		error.assert(n.prefixexp ~= nil, stream.peek(), "Found left parenthesis, expected end paren following expression")
-		-- A prefix alone can't be a variable
-		force_next = true
-	elseif peek.type == "identifier" then
-		n = {type="var",name=peek.content}
-		eat(stream, "identifier")
-		force_next = false -- This can be a terminal
-	end
 	
-	-- prefix consumed, now expect either indexing exp or dot Name
-	if maybe_eat(stream, "lsqbracket") then
-		-- If we found an identifier, we treat it as a prefix
-		if not force_next then n = {type="var", prefix=n} end
-
-		n.exp = exp(stream)
-		eat(stream, "rsqbracket")
-
-	elseif maybe_eat(stream, "dot") then
-		-- Treat ident as prefixexp
-		if not force_next then n = {type="var", prefix=n} end
-
-		peek = check_keyword(stream.peek())
-		eat(stream, "identifier")
-		n.name = peek.content
-
-	elseif force_next then
-		error.err(peek, "Expected identifier or prefix expression")
-	end
-	
-	return n
 end
 
 local function for_block(AST, stream, node)
