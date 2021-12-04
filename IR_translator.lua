@@ -48,7 +48,7 @@ local function setup_stack(IR)
 		ins.type = "alloc"
 		ins.size = s
 		ins.tag = t
-		ins.cmt = "stack alloc for "..(t or "")
+		ins.cmt = "alloc "..(t or "").." offset:"..stack.ptr
 		stack.ptr = stack.ptr + s
 		
 		table.insert(IR.code, ins)
@@ -82,6 +82,16 @@ local function setup_stack(IR)
 			offset = offset + stack.variables[i].size
 		end
 		return "qword [rsp+"..offset.."]"
+	end
+
+	stack.get_location = function(index)
+		if index > stack.alloc_index then return -1 end
+		local offset = 0
+		for i=1, #stack.variables, 1 do
+			if stack.variables[i].index == index then break end
+			offset = offset + stack.variables[i].size
+		end
+		return offset
 	end
 
 	IR.stack = stack
@@ -156,25 +166,51 @@ end
 local parse_exp
 
 local function parse_un(IR, node)
-	error.assert(node.right ~= nil, node, "Expected unary expression")
-	
+	error.assert(node.right ~= nil or node.left ~= nil, node, "Expected unary expression")
+
+	-- Result is what is used for further calculation
+	-- thus we should return the "old" value of variable
+	-- incase it's postfix, this old value can be stack-allocated temp var
+
 	local num
-	if node.right.type == "exp" then
-		num = parse_exp(IR, node.right.exp)
-		ir_mov(IR, "rax", IR.stack.calc_rsp(num))
-	elseif node.right.type == "identifier" then
-		num = IR.stack.get_tag(node.right.name)
-		num = num.index
-		ir_mov(IR, "rax", IR.stack.calc_rsp(num))
-	elseif node.right.type == "number" then
+	ir_mov(IR, "r10", 1)
+	if node.right ~= nil then
+		if node.right.type == "exp" then
+			error.assert(false,node,"Syntax error")
+			num = parse_exp(IR, node.right.exp)
+			ir_mov(IR, "rax", IR.stack.calc_rsp(num), "move from ["..IR.stack.get_location(num).."]")
+		elseif node.right.type == "identifier" then
+			num = IR.stack.get_tag(node.right.name)
+			error.assert(num ~= nil, node.right, "Undeclared identifier")
+			num = num.index
+			ir_mov(IR, "rax", IR.stack.calc_rsp(num), "move from ["..IR.stack.get_location(num).."]")
+		elseif node.right.type == "number" then
+			error.assert(false, node, "Syntax error")
+			num = IR.stack.alloc(64)
+			ir_mov(IR, "rax", node.right.value)
+		end
+		if node.op == "--" then ir_sub(IR, "pre--") end
+		if node.op == "++" then ir_add(IR, "pre++") end
+		-- Result is in rax
+		ir_mov(IR, IR.stack.calc_rsp(num), "rax", "move to ["..IR.stack.get_location(num).."]") -- Move result of prefix calc into var "num"
+	elseif node.left ~= nil then
+		local true_value
 		num = IR.stack.alloc(64)
-		ir_mov(IR, "rax", node.right.value)
+		if node.left.type == "identifier" then
+			true_value = IR.stack.get_tag(node.left.name)
+			error.assert(true_value ~= nil, node.left, "Undeclared identifier")
+			true_value = true_value.index -- we only want the index, overwrite temp with this index
+			ir_mov(IR, "rax", IR.stack.calc_rsp(true_value), "move from ["..IR.stack.get_location(true_value).."]") -- get value into rax
+			ir_mov(IR, IR.stack.calc_rsp(num), "rax", "move to ["..IR.stack.get_location(num).."]") -- move value into the result before we do add/sub
+		else error.assert(false, node, "Syntax error")
+		end
+
+		if node.op == "--" then ir_sub(IR, "post--") end
+		if node.op == "++" then ir_add(IR, "post++") end
+		ir_mov(IR, IR.stack.calc_rsp(true_value), "rax", "move to ["..IR.stack.get_location(true_value).."]") -- Move result of prefix calc into our variable (this doesnt affect the return value)
+
 	end
 
-	-- Only unary op is currently negation so just use it
-
-	ir_neg(IR, "rax")
-	ir_mov(IR, IR.stack.calc_rsp(num), "rax")
 	return num
 end
 
@@ -211,7 +247,7 @@ parse_bin = function(IR, node)
 	local op_node = node
 
 	local left, right
-	
+
 	left = parse_exp(IR, node.left)
 	right = parse_exp(IR, node.right)
 
@@ -225,12 +261,12 @@ parse_bin = function(IR, node)
 
 	local reg1 = "rax"
 	local reg2 = "r10"
-	
-	ir_mov(IR, reg1, IR.stack.calc_rsp(left), "Prep left")
-	ir_mov(IR, reg2, IR.stack.calc_rsp(right), "Prep right")
+
+	ir_mov(IR, reg1, IR.stack.calc_rsp(left), "Prep left from ["..IR.stack.get_location(left).."]")
+	ir_mov(IR, reg2, IR.stack.calc_rsp(right), "Prep right from ["..IR.stack.get_location(right).."]")
 	op_list[op_node.op](IR, "")
 	local result = IR.stack.alloc(64)
-	ir_mov(IR, IR.stack.calc_rsp(result), "rax", "Result into stack")
+	ir_mov(IR, IR.stack.calc_rsp(result), "rax", "Result into ["..IR.stack.get_location(result).."]")
 
 	return result
 end
@@ -243,19 +279,38 @@ local function parse_assign(IR, node)
 
 	if node == nil then error("huh") end
 
-	local result_addr = parse_exp(IR, node)
+	local result = parse_exp(IR, node) -- rax contains result
 
 	local addr = IR.stack.get_tag(assign_node.left.name)
 	if addr == nil then
-		addr = IR.stack.alloc(64, assign_node.left.name)
+		addr = IR.stack.alloc(64, assign_node.left.name, "var \""..assign_node.left.name.."\"")
 	else
 		addr = addr.index
 	end
 
-	ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Store rax temp into stack")
+	ir_mov(IR, "rax", IR.stack.calc_rsp(result))
+	ir_mov(IR, IR.stack.calc_rsp(addr), "rax", "Store into var \""..assign_node.left.name.."\" ["..IR.stack.get_location(addr).."]")
 	result_addr = addr
 
 	-- Result is on the stack at result_addr
+end
+
+local function parse_unary(IR, node)
+	local ident = node.left or node.right
+	local addr = IR.stack.get_tag(ident.name)
+	if addr == nil then
+		addr = IR.stack.alloc(64, ident.name, "var \""..ident.name.."\"")
+	else
+		addr = addr.index
+	end
+	ir_mov(IR, "rax", IR.stack.calc_rsp(addr))
+	ir_mov(IR, "r10", 1)
+	if node.op == "++" then
+		ir_add(IR, "unary increment")
+	elseif node.op == "--" then
+		ir_sub(IR, "unary decrement")
+	end
+	ir_mov(IR, IR.stack.calc_rsp(addr), "rax")
 end
 
 local function IR_parse(IR, AST)
@@ -265,6 +320,8 @@ local function IR_parse(IR, AST)
 	for k, v in pairs(AST.nodes) do
 		if v.type == "operator" and v.op == "=" then
 			parse_assign(IR, v)
+		elseif v.type == "operator" and v.op_type == "unary" then
+			parse_unary(IR, v)
 		end
 	end
 

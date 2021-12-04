@@ -58,7 +58,7 @@ module.new = function(filename)
 	tokenstream.get_line = function(s) return s.line_nr end
 
 	-- Make members private and only allow function calls
-	
+
 	tokenstream_mt = {
 		__newindex = function(t, k, v)
 			error("Tried to modify read-only table ["..tostring(k).."] = "..tostring(v))
@@ -101,7 +101,7 @@ next = function(stream, peek)
 
 	if stream == nil then return nil end
 	if stream.filehandle == nil then return nil end
-	
+
 	-- declare variables used in local update func
 	local node
 	local line, match, len, offset

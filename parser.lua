@@ -34,18 +34,20 @@ local function parse_exp(tok, ast)
 
 	-- Accept numbers, variables and unary operators
 	local out = nil
-	if token.type == "parenthesis" and token.content == "(" then
+	if token.type == "lparen" and token.content == "(" then
+		--dbg()
 		local begin_tok = token.line
-		tok:consume("parenthesis")
+		tok:consume("lparen")
 		out = create_node(tok, token, "exp")
 		out.exp = parse_exp(tok, ast)
 		local prev_token = token
 		tok:eat_newline()
 		token = tok:peek()
 		assert(token ~= nil, token, "Expected expression")
-		assert(token.type == "parenthesis" and token.content == ")", 
+		assert(token.type == "rparen" and token.content == ")",
 				prev_token, "Expected closing parenthesis")
-		tok:consume("parenthesis")
+		tok:consume("rparen")
+		print("Parsed exp")
 		tok:eat_newline()
 		token = tok:peek()
 
@@ -55,7 +57,22 @@ local function parse_exp(tok, ast)
 		ast:addVar(out.name)
 		tok:consume("identifier")
 		tok:eat_newline()
-		token = tok:peek()
+		local next = tok:peek()
+		if next.type == "operator" and next.op_type == "unary" then
+			-- Postfix unary operator
+			local bin = create_node(tok, next)
+			tok:consume("operator")
+			bin.op = next.content
+			bin.op_type = next.op_type
+			bin.precedence = next.precedence
+			bin.left = out
+			bin.right = nil
+			out = bin
+			--dbg()
+			next = tok:peek()
+		end
+		tok:eat_newline()
+		token = next
 
 	elseif token.type == "number" then
 		out = create_node(tok, token)
@@ -65,10 +82,9 @@ local function parse_exp(tok, ast)
 		tok:eat_newline()
 		token = tok:peek()
 
-	elseif token.type == "operator" and 
-		(token.op_type == "unary" or 
-		token.op_type == "either") then
-		
+	elseif token.type == "operator" and
+		(token.op_type == "either") then
+
 		tok:consume("operator")
 		out = create_node(tok, token)
 		out.op = token.content
@@ -78,8 +94,8 @@ local function parse_exp(tok, ast)
 
 		-- Move this to the left branch of next operator since
 		-- unary has higher predecence than binary
-		if out.right ~= nil and out.right.type == "operator" and 
-			out.right.op_type ~= nil and 
+		if out.right ~= nil and out.right.type == "operator" and
+			out.right.op_type ~= nil and
 			out.right.op_type == "binary" then
 			local oldout = out
 			out = out.right
@@ -88,17 +104,38 @@ local function parse_exp(tok, ast)
 			oldout.right = oldleft
 		end
 		token = tok:peek()
+	elseif token.type == "operator" and token.op_type == "unary" then
+		tok:consume("operator")
+		local next = tok:peek()
+		local op = create_node(tok, token)
+		op.op = token.content
+		op.op_type = token.op_type
+		op.precedence = token.precedence
+		op.left = nil
+		tok:eat_newline()
+		if next.type ~= "identifier" then error("Expected identifier") end
+
+		out = create_node(tok, next)
+		tok:consume("identifier")
+		out.name = next.content
+		ast:addVar(out.name)
+
+		op.right = out
+		tok:eat_newline()
+		out = op
+		token = tok:peek()
 	elseif token.type == "newline" then error("Parser encountered an invalid state! code 93")
 	end
 
 	if out == nil then return nil end
 
 	-- Binary node parsing
-	if token ~= nil and token.type == "operator" and 
+	if token ~= nil and token.type == "operator" and
 		token.op_type ~= "unary" then
 			tok:consume("operator")
-			
+
 			-- Parse right side of operator
+			--dbg()
 			local right = parse_exp(tok, ast)
 			local oldOut = out
 			out = create_node(tok, token)
@@ -107,22 +144,25 @@ local function parse_exp(tok, ast)
 			out.op = token.content
 			out.left = oldOut
 			out.right = right
+			--dbg()
 			if out.precedence == nil then dbg() end
 			-- Compare predecences and switch if needed
 			-- (unary has left = nil and right = exp hence the switch)
-			if right ~= nil and right.type == "operator" and 
-				right.op_type == "binary" and 
+			if right ~= nil and right.type == "operator" and
+				right.op_type == "binary" and
 				(right.precedence < out.precedence or
 				out.type == "operator" and
-				(out.op_type == "unary" or 
+				(out.op_type == "unary" or
 				out.op_type == "either")) then
-				
+
 				local oldout = out
 				out = right
 				local oldleft = out.left
 				out.left = oldout
 				oldout.right = oldleft
+				--dbg()
 			end
+			token = tok:peek()
 	end
 	return out
 end
@@ -149,7 +189,7 @@ local function internal_parse(tok)
 
 
 	local node = parse_stat(tok, AST)
-	
+
 	while node ~= nil do
 		print("Found statement: "..tostring(node.type).."-"..
 				tostring(node.op_type))
@@ -159,6 +199,7 @@ local function internal_parse(tok)
 
 	if tok:has_next() then
 		print("WARNING! Parser didn't parse the whole file")
+		module.printAST(AST)
 	end
 
 	AST.node_count = #AST.nodes

@@ -1,7 +1,7 @@
 local parser = require("parser")
 local syntax = require("syntax")
 local emitter = require("nasm_emitter")
-local dbg = require("debugger")
+--local dbg = require("debugger")
 local IR = require("IR_translator")
 
 --local tokenstream = require("tokenstream")
@@ -13,6 +13,10 @@ local f = adaptivestream.new("mysrc.b")
 local num_cb = function(n) n.value = tonumber(n.content); return n end
 local op_cb = function(n)
 	if 	   n.content == "=" then n.op_type = "binary"
+								 n.precedence = 0
+	elseif n.content == "+=" then n.op_type = "binary"
+								 n.precedence = 0
+	elseif n.content == "-=" then n.op_type = "binary"
 								 n.precedence = 0
 	elseif n.content == "+" then n.op_type = "either"
 								 n.precedence = 1
@@ -44,6 +48,8 @@ f:add_token_match("%/", "operator", op_cb)
 f:add_token_match("%(", "parenthesis")
 f:add_token_match("%)", "parenthesis")
 f:add_token_match("%=", "operator", op_cb)
+f:add_token_match("%+%=", "operator", op_cb)
+f:add_token_match("%-%=", "operator", op_cb)
 
 f:push()
 
@@ -52,7 +58,7 @@ while n ~= nil and n.type ~= "EOF" do
 	local line = n.content
 	line = line:gsub("\n", "\\n") 
 	print("token: "..n.type.." offset: "..tostring(n.line_pos)..
-		" content: ["..line.."]")
+		" content: ["..line.."] type: "..(n.op_type or "n/a"))
 	f:consume(n.type)
 	if n.type == "newline" then 
 		io.write("Parsed from line "..n.line_nr..":\"")
@@ -84,6 +90,8 @@ f:add_token_match("%)", "rparen")
 f:add_token_match("%[", "lsqbracket")
 f:add_token_match("%]", "rsqbracket")
 f:add_token_match("%=", "operator", op_cb)
+f:add_token_match("%+%=", "operator", op_cb)
+f:add_token_match("%-%=", "operator", op_cb)
 f:add_token_match("%;", "semicolon")
 f:add_token_match("%:", "colon")
 f:add_token_match("%.%.%.", "tdot")

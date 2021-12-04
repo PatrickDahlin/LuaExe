@@ -35,7 +35,7 @@ end
 local function _stream_try_pattern(stream, pat, typ, move_stream)
 	line, match, len, offset = match_pattern(stream.line_unparsed, pat)
 	if match == nil then return nil end
-	
+
 	node = _make_node(stream, typ, match)
 	node.line_pos = node.line_pos + offset or 0
 
@@ -160,20 +160,20 @@ local function _internal_parse(stream)
 	if node == nil then
 		for k,v in pairs(stream.token_matches) do
 			local a = _stream_try_pattern(stream, v.pattern, v.type, true)
-			
+
 			if a ~= nil then
 				if v.matched_callback ~= nil then a = v.matched_callback(a) end
 				return a
 			end
 		end
 	end
-	
+
 	if node == nil then
 		print("ERROR; No matching pattern found for '"..stream.line_unparsed.."'")
 		dbg()
 	end
 
-	return node	
+	return node
 end
 
 
