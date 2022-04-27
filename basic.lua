@@ -1,7 +1,7 @@
 local parser = require("parser")
 local syntax = require("syntax")
 local emitter = require("nasm_emitter")
---local dbg = require("debugger")
+local dbg = require("debugger")
 local IR = require("IR_translator")
 
 --local tokenstream = require("tokenstream")
@@ -50,28 +50,33 @@ f:add_token_match("%)", "parenthesis")
 f:add_token_match("%=", "operator", op_cb)
 f:add_token_match("%+%=", "operator", op_cb)
 f:add_token_match("%-%=", "operator", op_cb)
+f:add_token_match("%s", "whitespace")
 
 f:push()
 
 local n = f:peek()
+
 while n ~= nil and n.type ~= "EOF" do
 	local line = n.content
-	line = line:gsub("\n", "\\n") 
+	line = line:gsub("\n", "\\n")
 	print("token: "..n.type.." offset: "..tostring(n.line_pos)..
 		" content: ["..line.."] type: "..(n.op_type or "n/a"))
 	f:consume(n.type)
-	if n.type == "newline" then 
+	if n.type == "newline" then
 		io.write("Parsed from line "..n.line_nr..":\"")
 		io.write(n.line_txt)
 		print("\"")
-	end	
+	end
 	n = f:peek()
 end
+--print("Parsed from line "..n.line_nr..":\""..n.line_txt.."\"")
 
 f:pop()
 
 f:close()
 f = nil
+
+
 
 local start = os.clock()
 --f = tokenstream.new("mysrc.b")
@@ -97,6 +102,7 @@ f:add_token_match("%:", "colon")
 f:add_token_match("%.%.%.", "tdot")
 f:add_token_match("%.%.", "ddot")
 f:add_token_match("%.", "dot")
+f:add_token_match("%s", "whitespace")
 
 local ast = parser.parse(f)
 
@@ -125,6 +131,9 @@ for k,v in pairs(ir.code) do
 	print(v.type.." "..tostring(v.reg1 or v.size).. " "..tostring(v.reg2 or "").." "..tostring(v.tag or ""))
 end
 
+return
+
+--[[
 print("Emitting asm")
 emitter.emit(ir, "build")
 

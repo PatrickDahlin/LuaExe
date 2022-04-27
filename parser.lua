@@ -28,7 +28,7 @@ end
 
 local function parse_exp(tok, ast)
 
-	tok:eat_newline()
+	tok:eat_newline(true)
 	local token = tok:peek()
 	if token == nil or token.type == "EOF" then return nil end
 
@@ -41,27 +41,29 @@ local function parse_exp(tok, ast)
 		out = create_node(tok, token, "exp")
 		out.exp = parse_exp(tok, ast)
 		local prev_token = token
-		tok:eat_newline()
+		tok:eat_newline(true)
 		token = tok:peek()
 		assert(token ~= nil, token, "Expected expression")
 		assert(token.type == "rparen" and token.content == ")",
 				prev_token, "Expected closing parenthesis")
-		tok:consume("rparen")
-		print("Parsed exp")
-		tok:eat_newline()
+		assert(tok:consume("rparen"))
+		--print("Parsed exp")
+		tok:eat_newline(true)
 		token = tok:peek()
 
 	elseif token.type == "identifier" then
 		out = create_node(tok, token)
 		out.name = token.content
 		ast:addVar(out.name)
-		tok:consume("identifier")
-		tok:eat_newline()
+		assert(tok:consume("identifier"))
+		tok:eat_newline(true)
+		--dbg()
 		local next = tok:peek()
 		if next.type == "operator" and next.op_type == "unary" then
 			-- Postfix unary operator
 			local bin = create_node(tok, next)
-			tok:consume("operator")
+			assert(tok:consume("operator"))
+			tok:eat_newline(true)
 			bin.op = next.content
 			bin.op_type = next.op_type
 			bin.precedence = next.precedence
@@ -71,26 +73,26 @@ local function parse_exp(tok, ast)
 			--dbg()
 			next = tok:peek()
 		end
-		tok:eat_newline()
+		tok:eat_newline(true)
 		token = next
 
 	elseif token.type == "number" then
 		out = create_node(tok, token)
 		out.value = tonumber(token.content)
 		ast:addConstant(out.value)
-		tok:consume("number")
-		tok:eat_newline()
+		assert(tok:consume("number"))
+		tok:eat_newline(true)
 		token = tok:peek()
 
 	elseif token.type == "operator" and
 		(token.op_type == "either") then
-
-		tok:consume("operator")
+		--dbg()
+		assert(tok:consume("operator"))
 		out = create_node(tok, token)
 		out.op = token.content
 		out.op_type = token.op_type
 		out.right = parse_exp(tok, ast)
-		tok:eat_newline()
+		tok:eat_newline(true)
 
 		-- Move this to the left branch of next operator since
 		-- unary has higher predecence than binary
@@ -105,23 +107,23 @@ local function parse_exp(tok, ast)
 		end
 		token = tok:peek()
 	elseif token.type == "operator" and token.op_type == "unary" then
-		tok:consume("operator")
+		assert(tok:consume("operator"))
 		local next = tok:peek()
 		local op = create_node(tok, token)
 		op.op = token.content
 		op.op_type = token.op_type
 		op.precedence = token.precedence
 		op.left = nil
-		tok:eat_newline()
+		tok:eat_newline(true)
 		if next.type ~= "identifier" then error("Expected identifier") end
 
 		out = create_node(tok, next)
-		tok:consume("identifier")
+		assert(tok:consume("identifier"))
 		out.name = next.content
 		ast:addVar(out.name)
 
 		op.right = out
-		tok:eat_newline()
+		tok:eat_newline(true)
 		out = op
 		token = tok:peek()
 	elseif token.type == "newline" then error("Parser encountered an invalid state! code 93")
@@ -132,10 +134,11 @@ local function parse_exp(tok, ast)
 	-- Binary node parsing
 	if token ~= nil and token.type == "operator" and
 		token.op_type ~= "unary" then
-			tok:consume("operator")
+			assert(tok:consume("operator"))
 
 			-- Parse right side of operator
 			--dbg()
+			tok:eat_newline(true)
 			local right = parse_exp(tok, ast)
 			local oldOut = out
 			out = create_node(tok, token)
@@ -162,6 +165,7 @@ local function parse_exp(tok, ast)
 				oldout.right = oldleft
 				--dbg()
 			end
+			tok:eat_newline(true)
 			token = tok:peek()
 	end
 	return out
@@ -196,14 +200,15 @@ local function internal_parse(tok)
 		table.insert(AST.nodes, node)
 		node = parse_stat(tok, AST)
 	end
-
+	--tok:eat_whitespace()
 	if tok:has_next() then
 		print("WARNING! Parser didn't parse the whole file")
+		print("Token found "..tok:peek().type.."["..tok:peek().content.."]")
 		module.printAST(AST)
 	end
 
 	AST.node_count = #AST.nodes
-	return AST	
+	return AST
 end
 
 
@@ -241,20 +246,26 @@ end
 
 module.printAST = function(ast)
 	if ast == nil then return end
-
+	print("--AST BEGIN--")
 	for k,node in pairs(ast.nodes) do
 		print_node(node) print("") --newline
 	end
+	if #ast.nodes == 0 then print("- empty -") end
 
-	print("Variables and their usage counts;")
-	for k,v in pairs(ast.variables) do
-		print("	"..tostring(k).." (used: "..v.." times)")
+	if #ast.variables > 0 then
+		print("Variables and their usage counts;")
+		for k,v in pairs(ast.variables) do
+			print("	"..tostring(k).." (used: "..v.." times)")
+		end
 	end
 
-	print("Constants and their usage counts;")
-	for k,v in pairs(ast.constants) do
-		print("	"..tostring(k).." (used "..v.." times)")
+	if #ast.constants > 0 then
+		print("Constants and their usage counts;")
+		for k,v in pairs(ast.constants) do
+			print("	"..tostring(k).." (used "..v.." times)")
+		end
 	end
+	print("--AST END--")
 
 end
 

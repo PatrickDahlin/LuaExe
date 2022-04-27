@@ -25,7 +25,7 @@ end
 -- int - number of whitespaces before pattern
 function match_pattern(str, pat)
 	--dbg()
-	local a, b = string.match(str, "^%s*()"..pat.."()")
+	local a, b = string.match(str, "^()"..pat.."()")
 	if a == nil then return str, nil, 0, 0 end
 	return string.sub(str, b), string.sub(str, a, b-1), b-1, a-1
 end

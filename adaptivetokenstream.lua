@@ -22,7 +22,7 @@ local function _make_node(stream, type, content)
 	n.type = type
 	n.line_pos = stream.line_pos
 	n.line_nr = stream.line_nr
-	n.line_txt = stream.line_txt
+	n.line_txt = stream.line_txt:gsub("\r\n",""):gsub("\n","")
 	n.file = stream.file
 	return n
 end
@@ -37,14 +37,14 @@ local function _stream_try_pattern(stream, pat, typ, move_stream)
 	if match == nil then return nil end
 
 	node = _make_node(stream, typ, match)
-	node.line_pos = node.line_pos + offset or 0
+	node.line_pos = (node.line_pos + offset) or 0
 
 	if move_stream ~= nil and move_stream then
 		stream.line_pos = stream.line_pos + len
 		stream.file_pos = stream.file_pos + len
 		stream.line_unparsed = line
 	end
-	return node	
+	return node
 end
 
 -- Functions in stream
@@ -55,8 +55,10 @@ local next,
 		pop,
 		has_next,
 		eat_newline,
+		eat_whitespace,
 		close,
-		add_token_match
+		add_token_match,
+		next_unparsed_line
 
 --	==========================================
 --
@@ -71,9 +73,11 @@ module.new = function(filename)
 		line_txt = "",		-- Current line as a whole
 		line_pos = 1,		-- Where in the line are we currently, offset from beginning
 		line_unparsed = "", -- Current line but contains only unparsed data
-		line_nr = 0,		-- Line number in the file
+		line_nr = 1,		-- Line number in the file
 		file = filename,	-- Location of the file
 		file_pos = 0,		-- Offset into the file where we currently are at
+		file_txt = "",		--
+		file_unparsed = "", --
 		states = {},		-- Internal state objects used for push/pop
 		token_matches = {}
 	}
@@ -82,8 +86,11 @@ module.new = function(filename)
 	if stream.filehandle == nil then
 		error("Couldn't read file "..filename)
 	end
+	stream.file_txt = stream.filehandle:read("*a")
+	stream.file_unparsed = stream.file_txt
+	stream.filehandle:close()
+	stream.filehandle = nil
 
-	stream.lines = stream.filehandle:lines()
 	stream.next = next
 	stream.peek = peek
 	stream.consume = consume
@@ -91,7 +98,9 @@ module.new = function(filename)
 	stream.pop = pop
 	stream.has_next = has_next
 	stream.eat_newline = eat_newline
+	stream.eat_whitespace = eat_whitespace
 	stream.close = close
+	stream.next_unparsed_line = next_unparsed_line
 
 	stream.add_token_match = add_token_match
 
@@ -119,6 +128,12 @@ has_next = function(stream)
 	return stream:peek().type ~= "EOF"
 end
 
+next_unparsed_line = function(stream)
+	local s,m,e = stream.file_unparsed:match("()[^\r\n]*()[\r\n]?()")
+	local line = stream.file_unparsed:sub(s,m)
+	if stream.file_unparsed == "" then line = nil end
+	return line, e
+end
 
 --	==========================================
 --
@@ -128,7 +143,7 @@ end
 local function _move_stream(stream, n, unparsed)
 	stream.line_pos = stream.line_pos + n
 	stream.file_pos = stream.file_pos + n
-	stream.line_unparsed = trim(unparsed)
+	stream.line_unparsed = unparsed
 end
 
 
@@ -139,21 +154,26 @@ end
 --	==========================================
 local function _internal_parse(stream)
 	assert(stream)
-	assert(stream.filehandle)
 
 	local node
 
 	if trim(stream.line_unparsed) == "" then
-		local line = stream.lines()
+		local line, end_cursor = stream:next_unparsed_line()
+
 		if line == nil then
 			-- eof
 			node = _make_node(stream, "EOF", "")
 		else
 			-- newline
-			node = _make_node(stream, "newline", "\n")
+			if stream.file_pos > 0 then
+				node = _make_node(stream, "newline", "\n")
+				stream.line_nr = stream.line_nr + 1
+			end
 			_move_stream(stream, 1, line)
-			stream.line_txt = line
+			stream.line_txt = line or "nil"
 			stream.line_pos = 0
+			stream.file_unparsed = stream.file_unparsed:sub(end_cursor)
+			stream.file_pos = stream.file_pos + end_cursor
 		end
 	end
 
@@ -183,7 +203,8 @@ end
 --
 --	==========================================
 next = function(stream)
-	return _internal_parse(stream)
+	local n = _internal_parse(stream)
+	return n
 end
 
 --	==========================================
@@ -216,9 +237,17 @@ end
 --	Eats tokens until non-newline token is found
 --
 --	==========================================
-eat_newline = function(stream)
-	while stream:peek().type == "newline" do
+eat_newline = function(stream, include_whitespace)
+	while stream:peek().type == "newline" or (include_whitespace and stream:peek().type == "whitespace" or not include_whitespace or include_whitespace == nil) do
 		stream:next()
+	end
+end
+
+eat_whitespace = function(stream)
+	local tok = stream:peek().type
+	while tok == "whitespace" or tok == "newline" do
+		stream:next()
+		tok = stream:peek().type
 	end
 end
 
@@ -249,12 +278,6 @@ pop = function(stream)
 		stream[k] = v
 	end
 	table.remove(stream.states)
-	if stream.filehandle ~= nil then
-		local pos = stream.file_pos
-		if pos < 0 then pos = 0 end
-		stream.filehandle:seek("set", pos)
-		stream.lines = stream.filehandle:lines()
-	end
 end
 
 --	==========================================
@@ -263,7 +286,7 @@ end
 --
 --	==========================================
 close = function(stream)
-	if stream.filehandle ~= nil then stream.filehandle:close(); stream.filehandle = nil end
+	--if stream.filehandle ~= nil then stream.filehandle:close(); stream.filehandle = nil end
 end
 
 return module

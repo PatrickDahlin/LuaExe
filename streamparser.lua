@@ -110,7 +110,7 @@ local function eval_prefix(stream)
 	local peek = check_keyword(stream.peek())
 	local prefix
 
-	error.assert(peek.type == "identifier" ||
+	error.assert(peek.type == "identifier" or
 				peek.type == "lparen", peek, "Expected identifier or expression")
 
 	local last_type = ""
@@ -247,10 +247,10 @@ local function parse_block(stream)
 	check_keyword(tmp)
 	if tmp.type == "keyword" then
 		if tmp.content == "return" then
-			block.laststat = {"type"="return", 
+			block.laststat = { type="return",
 								explist = parse_explist(stream)}
 		elseif tmp.content == "break" then
-			block.laststat = {"type" = "break"}
+			block.laststat = { type = "break"}
 		end
 	end
 

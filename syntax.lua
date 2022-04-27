@@ -158,6 +158,7 @@ module.verify = function(ast)
 	for k,v in pairs(ast.nodes) do
 		if not assign_verification(v) then
 			if not unary_verification(v) then
+				error.assert(false, v, "Syntax error")
 				return false
 			end
 		end
