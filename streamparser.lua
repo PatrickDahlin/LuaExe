@@ -32,8 +32,8 @@ end
 
 ]]
 
-local func_call, 
-		varlist, 
+local func_call,
+		varlist,
 		var,
 		prefixexp,
 		args,
@@ -92,13 +92,13 @@ local function prefixexp(stream)
 	if maybe_eat(stream, "lsqbracket") then
 		n = {type="prefixexp", prefixexp=n, exp=exp(stream)}
 		eat(stream, "rsqbracket")
-	
+
 	elseif maybe_eat(stream, "dot") then
 		error.assert(stream.peek().type == "identifier", stream.peek(), 
 						"Expected identifier")
 		n = {type="prefixexp", prefixexp=n, var=stream.peek().content}
 		eat(stream, "identifier")
-	
+
 	end
 end
 
@@ -115,6 +115,7 @@ local function eval_prefix(stream)
 
 	local last_type = ""
 	-- Eat Name or ( exp ) as first prefix
+	-- This handles the case of
 	if peek.type == "identifier" then
 		prefix = {type="var", name=peek.content}
 		eat("identifier")
@@ -150,7 +151,7 @@ local function eval_prefix(stream)
 			-- Args
 			eat("colon")
 			ensure("identifier")
-			new_exp = {type="func_call", 
+			new_exp = {type="func_call",
 						name=stream.peek().content,
 						args=args(stream)}
 			parsed = true
@@ -237,10 +238,14 @@ local function parse_block(stream)
 	block.statements = {}
 	local stat = nil
 
-	while (stat = parse_stat(stream)) ~= nil do
-		table.insert(block.statements, stat)
-		maybe_eat(stream, "semicolon")
-	end
+	repeat
+		stat = parse_stat(stream)
+		if stat ~= nil then
+			table.insert(block.statements, stat)
+			maybe_eat(stream, "semicolon")
+		end
+	until stat == nil
+
 
 	-- Laststat
 	local tmp = stream.peek()
@@ -268,10 +273,48 @@ local function parse_stream(stream)
 	return AST
 end
 
+local function _parse(tok, syntax_base, ast)
+
+	syntax_base = syntax_base or syntax.base
+	ast = ast or {}
+	for k,v in ipairs(syntax_base) do
+		-- First level list of possible parse-entries
+		for k2,v2 in ipairs(v) do
+			-- Individual token parses (possibly terminals or recursive entries)
+			local is_term = v2.terminal or false
+			local is_repeating = v2.repeated or false
+			local is_optional = v2.optional or false
+			-- In case this entry has a validation-function then we need to validate the stream contents before accepting this node
+			local has_validation_func = v2.validation_func or false
+			local val = v2[1] -- first entry is the value of this entry
+			local next = tok.next()
+			if is_term then
+				-- Compare
+				
+			end
+
+			if type(val) == "table" then
+				-- This entry is a recursive type
+
+				repeat
+					local res = _parse(tok, val, ast)
+					assert(is_optional or not (is_optional and res == nil) or is_repeating)
+					ast = res
+				until not is_repeating or (is_repeating and res == nil)
+
+			end
+		end
+	end
+	return ast
+end
+
 module.parse = function(tok)
 	assert(tok)
 	tok:push()
-	ast = parse_stream(tok)
+	--ast = parse_stream(tok)
+
+	local ast = _parse(tok)
+
 	tok:pop()
 	return ast
 end

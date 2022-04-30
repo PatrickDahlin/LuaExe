@@ -115,7 +115,7 @@ local function parse_exp(tok, ast)
 		op.precedence = token.precedence
 		op.left = nil
 		tok:eat_newline(true)
-		if next.type ~= "identifier" then error("Expected identifier") end
+		if next.type ~= "identifier" then err(token,"Expected identifier") end
 
 		out = create_node(tok, next)
 		assert(tok:consume("identifier"))
@@ -126,7 +126,7 @@ local function parse_exp(tok, ast)
 		tok:eat_newline(true)
 		out = op
 		token = tok:peek()
-	elseif token.type == "newline" then error("Parser encountered an invalid state! code 93")
+	elseif token.type == "newline" then err(token, "Parser encountered an invalid state! code 93")
 	end
 
 	if out == nil then return nil end
@@ -200,7 +200,7 @@ local function internal_parse(tok)
 		table.insert(AST.nodes, node)
 		node = parse_stat(tok, AST)
 	end
-	--tok:eat_whitespace()
+
 	if tok:has_next() then
 		print("WARNING! Parser didn't parse the whole file")
 		print("Token found "..tok:peek().type.."["..tok:peek().content.."]")

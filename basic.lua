@@ -4,10 +4,8 @@ local emitter = require("nasm_emitter")
 local dbg = require("debugger")
 local IR = require("IR_translator")
 
---local tokenstream = require("tokenstream")
 local adaptivestream = require("adaptivetokenstream")
-
---local f = tokenstream.new("mysrc.b")
+local streamparser = require("streamparser")
 local f = adaptivestream.new("mysrc.b")
 
 local num_cb = function(n) n.value = tonumber(n.content); return n end
@@ -37,49 +35,9 @@ local op_cb = function(n)
 	return n
 end
 
-f:add_token_match("%a%w*_*%w*", "identifier")
-f:add_token_match("%d+", "number", num_cb)
-f:add_token_match("%+%+", "operator", op_cb)
-f:add_token_match("%+", "operator", op_cb)
-f:add_token_match("%-%-", "operator", op_cb)
-f:add_token_match("%-", "operator", op_cb)
-f:add_token_match("%*", "operator", op_cb)
-f:add_token_match("%/", "operator", op_cb)
-f:add_token_match("%(", "parenthesis")
-f:add_token_match("%)", "parenthesis")
-f:add_token_match("%=", "operator", op_cb)
-f:add_token_match("%+%=", "operator", op_cb)
-f:add_token_match("%-%=", "operator", op_cb)
-f:add_token_match("%s", "whitespace")
-
-f:push()
-
-local n = f:peek()
-
-while n ~= nil and n.type ~= "EOF" do
-	local line = n.content
-	line = line:gsub("\n", "\\n")
-	print("token: "..n.type.." offset: "..tostring(n.line_pos)..
-		" content: ["..line.."] type: "..(n.op_type or "n/a"))
-	f:consume(n.type)
-	if n.type == "newline" then
-		io.write("Parsed from line "..n.line_nr..":\"")
-		io.write(n.line_txt)
-		print("\"")
-	end
-	n = f:peek()
-end
---print("Parsed from line "..n.line_nr..":\""..n.line_txt.."\"")
-
-f:pop()
-
-f:close()
-f = nil
-
-
 
 local start = os.clock()
---f = tokenstream.new("mysrc.b")
+
 f = adaptivestream.new("mysrc.b")
 
 f:add_token_match("%a%w*_*%w*", "identifier")
@@ -103,6 +61,36 @@ f:add_token_match("%.%.%.", "tdot")
 f:add_token_match("%.%.", "ddot")
 f:add_token_match("%.", "dot")
 f:add_token_match("%s", "whitespace")
+
+----------------------------------------------------------------
+-- Token verbose output
+
+f:push()
+
+local n = f:peek()
+
+while n ~= nil and n.type ~= "EOF" do
+	local line = n.content
+	line = line:gsub("\n", "\\n")
+	print("token: "..n.type.." offset: "..tostring(n.line_pos)..
+		" content: ["..line.."] type: "..(n.op_type or "n/a"))
+	f:consume(n.type)
+	if n.type == "newline" then
+		io.write("Parsed from line "..n.line_nr..":\"")
+		io.write(n.line_txt)
+		print("\"")
+	end
+	n = f:peek()
+end
+
+f:pop()
+----------------------------------------------------------------
+
+f:push()
+
+local tmp = streamparser.parse(f)
+
+f:pop()
 
 local ast = parser.parse(f)
 
@@ -131,9 +119,7 @@ for k,v in pairs(ir.code) do
 	print(v.type.." "..tostring(v.reg1 or v.size).. " "..tostring(v.reg2 or "").." "..tostring(v.tag or ""))
 end
 
-return
 
---[[
 print("Emitting asm")
 emitter.emit(ir, "build")
 

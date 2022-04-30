@@ -23,7 +23,7 @@ module.new = function()
 	stack.pointer = 0
 	stack.list = {}
 
-	stack.dealloc = dealloc
+	--stack.dealloc = dealloc
 
 end
 

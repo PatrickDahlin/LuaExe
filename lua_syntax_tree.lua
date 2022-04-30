@@ -18,7 +18,7 @@
 local module = {}
 
 -- Temp variables
-local chunk, 
+local chunk,
 	stat,
 	_stat,
 	laststat,
@@ -34,8 +34,8 @@ local chunk,
 
 -- Validator func:s, these are needed for tokens with custom content
 -- 	which can only be identified by it's type
-local function identifier(n) return n ~= nil and 
-							n.type ~= nil and 
+local function identifier(n) return n ~= nil and
+							n.type ~= nil and
 							n.type == "identifier" end
 
 local function number(n) return n ~= nil and

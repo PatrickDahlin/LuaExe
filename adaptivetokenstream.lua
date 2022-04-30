@@ -190,7 +190,7 @@ local function _internal_parse(stream)
 
 	if node == nil then
 		print("ERROR; No matching pattern found for '"..stream.line_unparsed.."'")
-		dbg()
+		--dbg()
 	end
 
 	return node
