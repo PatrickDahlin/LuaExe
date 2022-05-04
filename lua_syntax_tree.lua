@@ -47,6 +47,7 @@ local function string(n) return n ~= nil and
 							n.type == "string" end
 
 binop = {
+	type = "operator",
 	[1] = {{"+", terminal = true}},
 	[2] = {{"-", terminal = true}},
 	[3] = {{"*", terminal = true}},
@@ -63,12 +64,14 @@ binop = {
 }
 
 unop = {
+	type = "operator",
 	[1] = {{"-", terminal = true}},
 	[2] = {{"not", terminal = true}},
 	[3] = {{"#", terminal = true}}
 }
 
 exp = {
+	type = "expression",
 	[1] = {
 		{number, terminal = true, validation_func = true},
 	},
@@ -84,6 +87,7 @@ exp = {
 }
 
 var = {
+	type = "variable",
 	[1] = {
 		{identifier, terminal = true, validation_func = true}
 	}
@@ -91,6 +95,7 @@ var = {
 
 -- Temp step to include "," in the repeated var list
 var_list_ext = {
+	type = "varlist",
 	[1] = {
 		{",", terminal = true},
 		{var}
@@ -98,6 +103,7 @@ var_list_ext = {
 }
 
 varlist = {
+	type = "varlist",
 	[1] = {
 		{var},
 		{var_list_ext, repeated = true}
@@ -119,6 +125,7 @@ explist = {
 }
 
 stat = {
+	type = "statement",
 	[1] = {
 		{varlist},
 		{"=", terminal = true},
@@ -127,6 +134,7 @@ stat = {
 }
 
 laststat = {
+	type = "statement",
 	[1] = {
 		{"return", terminal = true},
 		{explist, optional = true}
@@ -137,6 +145,7 @@ laststat = {
 }
 
 _stat = {
+	type = "statement",
 	[1] = {
 		{stat},
 		{";", optional = true, terminal = true}
@@ -145,6 +154,7 @@ _stat = {
 
 -- Extra step to include optional ";" at the end
 _laststat = {
+	type = "last_statement",
 	[1] = {
 		{laststat},
 		{";", optional = true, terminal = true}
@@ -152,6 +162,7 @@ _laststat = {
 }
 
 chunk = {
+	type = "chunk",
 	[1] = {
 		{_stat, repeated = true},
 		{_laststat, optional = true}

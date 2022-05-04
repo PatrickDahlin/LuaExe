@@ -5,7 +5,7 @@ local dbg = require("debugger")
 local IR = require("IR_translator")
 
 local adaptivestream = require("adaptivetokenstream")
-local streamparser = require("streamparser")
+
 local f = adaptivestream.new("mysrc.b")
 
 local num_cb = function(n) n.value = tonumber(n.content); return n end
@@ -86,16 +86,16 @@ end
 f:pop()
 ----------------------------------------------------------------
 
-f:push()
+--f:push()
 
-local tmp = streamparser.parse(f)
+--local tmp = parser.parse(f)
 
-f:pop()
+--f:pop()
 
 local ast = parser.parse(f)
 
 
-local res = syntax.verify(ast)
+--local res = syntax.verify(ast)
 
 delta = os.clock() - start
 print("Compile time "..(delta*1000).." ms")
@@ -105,8 +105,7 @@ if res then print("OK") else print("ERROR") end
 
 print("")
 parser.printAST(ast)
-
-
+--[[
 local nasm_cmd = "nasm -f win64 build.asm -o build.o -Wall"
 local gcc_cmd = "gcc build.o -o build.exe -Wall"
 

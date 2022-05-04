@@ -1,9 +1,10 @@
 require("util")
 local module = {}
-
+local enabled = true
 
 module.err = function(node, msg)
-	if node ~= nil then
+    if not enabled then return end
+    if node ~= nil then
 		print("------------------------")
 		print(tostring(node.file or "Unknown")..":"..tostring(node.line_nr or 0).." - Syntax error ")
 		print(tostring(node.line_txt or "[Source not avaliable]"))
@@ -24,7 +25,15 @@ module.err = function(node, msg)
 	end
 end
 
+module.enable = function()
+    enabled = true
+end
+module.disable = function()
+    enabled = false
+end
+
 module.assert = function(v, n, msg)
+    if not enabled then return end
     if v ~= nil and v then return end
     module.err(n, msg)
     os.exit()
