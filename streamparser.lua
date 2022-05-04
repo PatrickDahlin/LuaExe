@@ -273,12 +273,21 @@ local function parse_stream(stream)
 	return AST
 end
 
+local function make_node(syntax_node)
+	if syntax_node.type == nil then return nil end
+	local res = {}
+	res.type = syntax_node.type
+	res.subnodes = {}
+	return res
+end
+
 local function _parse(tok, syntax_base, ast)
 
 	syntax_base = syntax_base or syntax.base
 	ast = ast or {}
 	for k,v in ipairs(syntax_base) do
 		-- First level list of possible parse-entries
+		local node = make_node(v)
 		for k2,v2 in ipairs(v) do
 			-- Individual token parses (possibly terminals or recursive entries)
 			local is_term = v2.terminal or false
@@ -290,7 +299,10 @@ local function _parse(tok, syntax_base, ast)
 			local next = tok.next()
 			if is_term then
 				-- Compare
-				
+				if has_validation_func and val(next.content) then
+					assert(node)
+					
+				end
 			end
 
 			if type(val) == "table" then
