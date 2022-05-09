@@ -6,7 +6,7 @@ local IR = require("IR_translator")
 
 local adaptivestream = require("adaptivetokenstream")
 
-local f = adaptivestream.new("mysrc.b")
+--local f = adaptivestream.new("mysrc.b")
 
 local num_cb = function(n) n.value = tonumber(n.content); return n end
 local op_cb = function(n)
@@ -52,6 +52,7 @@ f:add_token_match("%(", "lparen")
 f:add_token_match("%)", "rparen")
 f:add_token_match("%[", "lsqbracket")
 f:add_token_match("%]", "rsqbracket")
+f:add_token_match("%=%=", "operator", op_cb)
 f:add_token_match("%=", "operator", op_cb)
 f:add_token_match("%+%=", "operator", op_cb)
 f:add_token_match("%-%=", "operator", op_cb)
@@ -60,7 +61,9 @@ f:add_token_match("%:", "colon")
 f:add_token_match("%.%.%.", "tdot")
 f:add_token_match("%.%.", "ddot")
 f:add_token_match("%.", "dot")
+f:add_token_match("%,", "comma")
 f:add_token_match("%s", "whitespace")
+f:add_token_match("\".*\"","string")
 
 ----------------------------------------------------------------
 -- Token verbose output
@@ -72,8 +75,9 @@ local n = f:peek()
 while n ~= nil and n.type ~= "EOF" do
 	local line = n.content
 	line = line:gsub("\n", "\\n")
-	print("token: "..n.type.." offset: "..tostring(n.line_pos)..
-		" content: ["..line.."] type: "..(n.op_type or "n/a"))
+	io.write("token: "..n.type.." offset: "..tostring(n.line_pos)..
+		" content: ["..line.."] ")
+	if n.op_type ~= nil then print("type: "..(n.op_type or "n/a")) else io.write("\n") end
 	f:consume(n.type)
 	if n.type == "newline" then
 		io.write("Parsed from line "..n.line_nr..":\"")

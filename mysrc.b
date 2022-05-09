@@ -1,7 +1,6 @@
-a = 2
-n = 3 * (a * 2)
-a = n
+aadsf = 2
+nfds = 3 * (a * 2)
+adsds, dsa = n, 3
 
-myident:test
-
-a++
+adsds.myident[2], afds.fd = 2, 3 * 4, 1
+adfsa:test ""[54] = 2

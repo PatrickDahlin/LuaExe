@@ -82,6 +82,7 @@ local function parse_prefix(tok,ast)
 			-- ]
 			eat(tok,"lsqbracket")
 			new_exp = create_node(tok, token, "var_index")
+			new_exp.prefixexp = current_node
 			new_exp.exp = parse_exp(tok, ast)
 			eat(tok,"rsqbracket")
 			parsed = true
@@ -90,7 +91,9 @@ local function parse_prefix(tok,ast)
 			-- Name (var)
 			eat(tok, "dot")
 			ensure(tok,"identifier")
+			token = tok:peek()
 			new_exp = create_node(tok, token, "var_member")
+			new_exp.prefixexp = current_node
 			new_exp.name = token.content
 			eat(tok, "identifier")
 			parsed = true
@@ -100,19 +103,28 @@ local function parse_prefix(tok,ast)
 			-- Args
 			eat(tok,"colon")
 			ensure(tok,"identifier")
+			token = tok:peek()
 			new_exp = create_node(tok,token,"func_call")
+			new_exp.prefixexp = current_node
 			new_exp.name = token.content
+			eat(tok,"identifier")
+			tok:eat_newline(true)
 			new_exp.args = args(tok, ast)
 			parsed = true
 			last_type = "func_call"
+			--return new_exp, last_type
 		end
 		-- optional argument-list, disable errors
 		error.disable()
+		tok:eat_newline(true)
+		--dbg()
 		local a = args(tok,ast)
+
 		error.enable()
 		if a ~= nil then
 			-- Var with arguments (func)
 			new_exp = create_node(tok,token,"func_call")
+			new_exp.prefixexp = current_node
 			new_exp.args = a
 			parsed = true
 			last_type = "func_call"
@@ -124,7 +136,7 @@ local function parse_prefix(tok,ast)
 		end
 	end
 
-	return prefix, last_type
+	return current_node, last_type
 end
 
 args = function(tok, ast)
@@ -136,6 +148,7 @@ args = function(tok, ast)
 	if token.type == "string" then
 		node = create_node(tok,token,"args")
 		node.value = token.content
+		eat(tok, "string")
 		return node
 	end
 
@@ -154,6 +167,7 @@ args = function(tok, ast)
 			if not maybe_eat(tok, "comma") then tmpexp = nil end
 		until tmpexp == nil
 		eat(tok, "rparen")
+		return node
 	elseif token.type == "lbracket" then
 		error.assert(false, token, "Unimplemented compiler-feature")
 	end
@@ -169,7 +183,7 @@ parse_exp = function (tok, ast)
 	local out = nil
 	if token.type == "lparen" or token.type == "identifier" then
 		out = parse_prefix(tok,ast)
-
+		tok:eat_newline(true)
 		local next = tok:peek()
 		if token.type == "identifier" and next.type == "operator" and next.op_type == "unary" then
 			local bin = create_node(tok,next)
@@ -280,11 +294,38 @@ parse_exp = function (tok, ast)
 	return out
 end
 
+local function parse_var(tok,ast)
+	tok:eat_newline(true)
+	local token = tok:peek()
+	error.assert(token.type == "identifier" or token.type == "lparen", token, "Expected variable declaration")
+
+	local pre,last = parse_prefix(tok,ast)
+	error.assert(last == "var")
+
+	return pre
+	-- local var = create_node(tok,token,"var")
+	-- if token.type == "lparen" then
+	-- 	eat(tok,"lparen")
+	-- 	token = tok:peek()
+	-- 	local exp = parse_exp(tok,ast)
+	-- 	error.assert(exp ~= nil, token, "Expected expression")
+	-- 	ensure(tok, "rparen")
+	-- 	eat(tok,"rparen")
+	-- 	pre = create_node(tok,token,"prefixexp")
+	-- 	pre.exp = exp
+	-- 	var.prefix = pre
+	-- else
+	-- 	var.name = token.content
+	-- 	eat(tok, "identifier")
+	-- end
+	-- return var
+end
+
 local function parse_varlist(tok, ast)
 	tok:eat_newline(true)
 	local token = tok:peek()
 	error.assert(token.type == "identifier",token,"Expected identifier")
-
+	--dbg()
 	local out = create_node(tok,token,"varlist")
 	out.varlist = {}
 	repeat
@@ -312,8 +353,14 @@ local function parse_varlist(tok, ast)
 			tmp.name = token.content
 			table.insert(out.varlist, tmp)
 		else
+			--dbg()
+			error.enable()
+			error.assert(pre.type == "var" or pre.type ~= "func_call",pre,"Expected variable declaration")
+			error.disable()
 			table.insert(out.varlist, pre)
+			print(pre.name)
 		end
+		--dbg()
 		tok:eat_newline(true)
 		token = tok:peek()
 		if token.type ~= "comma" then break end
@@ -323,6 +370,7 @@ local function parse_varlist(tok, ast)
 		ensure(tok, "identifier")
 	until token.type ~= "identifier"
 	error.enable()
+	if #out.varlist == 0 then return nil end
 	return out
 end
 
@@ -351,11 +399,14 @@ end
 local function parse_stat(tok, ast)
 	-- varlist = explist
 	--dbg()
+	local token = tok:peek()
+	if token.type == "EOF" then return nil end
 	local varlist = parse_varlist(tok,ast)
 	tok:eat_newline(true)
-	ensure(tok, "operator")
+	--ensure(tok, "operator")
 	local token = tok:peek()
 	error.assert(token.content == "=",token,"Expected assignment operator")
+	--dbg()
 	eat(tok, "operator")
 	local explist = parse_explist(tok,ast)
 
@@ -438,6 +489,30 @@ local function print_node(node, indent)
 	elseif node.type == "var" then
 		write_space(indent)
 		print("var: "..node.name)
+	elseif node.type == "varlist" then
+		write_space(indent)
+		--dbg()
+		print("varlist("..#node.varlist.varlist.."): ")
+		--dbg()
+		for i, v in ipairs(node.varlist.varlist) do
+			print_node(v,indent+1)
+			if i < #node.varlist.varlist-1 then print(",") end
+		end
+		print("explist("..#node.explist.explist.."):")
+		for i,v in ipairs(node.explist.explist) do
+			print_node(v,indent+1)
+			if i < #node.explist.explist-1 then print(",") end
+		end
+	elseif node.type == "var_member" then
+		write_space(indent)
+		if node.prefixexp ~= nil then print_node(node.prefixexp, indent) end
+		print("- var_member: "..node.name)
+	elseif node.type == "var_index" then
+		write_space(indent)
+		--dbg()
+		if node.prefixexp ~= nil then print_node(node.prefixexp, indent) end
+		io.write("- var_index exp: ")
+		print_node(node.exp, indent)
 	else
 		write_space(indent)
 		io.write("[Unknown:"..node.type.."]")
