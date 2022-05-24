@@ -4,7 +4,9 @@ local module = {}
 local enabled = true
 
 module.err = function(node, msg)
-    if not enabled then print("Discarded error; "..msg) return end
+    if not enabled then --print("Discarded error; "..msg)
+        return
+    end
     if node ~= nil then
 		print("------------------------")
 		print(tostring(node.file or "Unknown")..":"..tostring(node.line_nr or 0).." - Syntax error ")
@@ -35,7 +37,9 @@ module.disable = function()
 end
 
 module.assert = function(v, n, msg)
-    if not enabled then print("Discarded error: "..(msg or "")) return end
+    if not enabled then --print("Discarded error: "..(msg or ""))
+        return
+    end
     if v ~= nil and v then return end
     module.err(n, msg)
     os.exit()

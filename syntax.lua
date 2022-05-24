@@ -150,18 +150,46 @@ local function assign_verification(node)
 	return v
 end
 
+local function varlist_verif(node)
+	local res
+	if node == nil then return false end
+
+	res = node.type == "varlist" and node.varlist ~= nil and node.explist ~= nil
+
+	local exps = node.explist
+	local vars = node.varlist
+	-- Check that we have same amount of variables as expressions
+	res = res and #exps.explist > 0 and #vars.varlist > 0
+	--dbg()
+	--error.assert(res, exps, "Variable count("..#vars.varlist..") must match expression count("..#exps.explist..")")
+	-- As lua doesnt enforce variable count to match expression count, neither should we
+
+	return res
+end
+
 local function unary_verification(node)
 	return verify_op(node, "unary", "--", false) or verify_op(node, "unary", "++")
 end
 
 module.verify = function(ast)
 	for k,v in pairs(ast.nodes) do
-		if not assign_verification(v) then
-			if not unary_verification(v) then
-				error.assert(false, v, "Syntax error")
-				return false
+		-- Statement checks
+		local res = varlist_verif(v)
+
+		if not res then
+			-- this isnt a varlist, hmmm
+			--error.assert(false, v, "Syntax error, expected statement")
+			res = v.type == "func_call"
+			if not res then
+				error.assert(false, v,"Syntax error, expected statement")
 			end
 		end
+--		if not assign_verification(v) then
+--			if not unary_verification(v) then
+--				error.assert(false, v, "Syntax error")
+--				return false
+--			end
+--		end
 	end
 	return true
 end

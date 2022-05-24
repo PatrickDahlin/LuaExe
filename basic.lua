@@ -98,8 +98,7 @@ f:pop()
 
 local ast = parser.parse(f)
 
-
---local res = syntax.verify(ast)
+local res = syntax.verify(ast)
 
 delta = os.clock() - start
 print("Compile time "..(delta*1000).." ms")

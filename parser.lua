@@ -513,6 +513,15 @@ local function print_node(node, indent)
 		if node.prefixexp ~= nil then print_node(node.prefixexp, indent) end
 		io.write("- var_index exp: ")
 		print_node(node.exp, indent)
+	elseif node.type == "func_call" then
+		write_space(indent)
+		if node.prefixexp ~= nil then print_node(node.prefixexp, indent) end
+		io.write("- func call: "..node.name)
+		print_node(node.args, indent)
+	elseif node.type == "args" then
+		write_space(indent)
+		print("args "..(node.value or ""))
+		if node.explist ~= nil then print_node(node.explist, indent) end
 	else
 		write_space(indent)
 		io.write("[Unknown:"..node.type.."]")
